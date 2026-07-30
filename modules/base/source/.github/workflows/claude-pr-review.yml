@@ -1,0 +1,34 @@
+name: Claude PR Review (Light)
+
+# CALLER STUB — copy this into <your-repo>/.github/workflows/claude-pr-review.yml
+#
+# This is the only file your repo needs. It catches the pull_request event
+# locally and delegates the review logic to the shared reusable workflow in
+# Viaanix/vx-repo-tools (pinned to a tag). The logic lives there, single-sourced;
+# you only maintain this ~15-line stub.
+#
+# Prerequisites (one-time, by the GitHub org admin):
+#   - The org secret CLAUDE_CODE_OAUTH_TOKEN_TOOLING must be shared to this repo.
+#   - Viaanix/vx-repo-tools → Settings → Actions → General → Access must allow
+#     its workflows to be used by repositories in the organization.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    uses: Viaanix/vx-repo-tools/.github/workflows/claude-pr-review.yml@v1
+    # The calling job must grant the permissions the reusable workflow needs —
+    # a reusable workflow operates within the caller's GITHUB_TOKEN permissions.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    # Pass all caller secrets (including the org-wide CLAUDE_CODE_OAUTH_TOKEN_TOOLING)
+    # through to the reusable workflow.
+    secrets: inherit

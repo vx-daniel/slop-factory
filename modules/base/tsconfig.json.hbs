@@ -1,0 +1,62 @@
+{
+  // Typecheck-only by design: `noEmit` is true and there is no build script. A blueprint cannot know
+  // whether the adopting project ships a library (needs `declaration` + `outDir`), bundles for a
+  // runtime, or is run directly by Node's type-stripping. Pick an emit strategy once you know — see
+  // README.md § "Choosing an emit strategy". Emit-only options are deliberately absent rather than
+  // present-and-inert, so nothing here reads as configured when it does nothing.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["es2022"],
+    // `bun` is added under `bun test` so the runner's own types resolve. Test files import from
+    // `vitest` even there — Bun maps that specifier at runtime — and `test/vitest-shim.d.ts` declares
+    // the module for `tsc`, which cannot follow Bun's mapping. Without both, `tsc --noEmit` fails on
+    // every test file with "Cannot find module 'vitest'" while the tests themselves run fine.
+    "types": [{{#if usesVitest}}"node"{{else}}"node", "bun"{{/if}}],
+
+    // Path aliases. `@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` instead of
+    // `../../../orders/store.js` and does not break when the importing file moves.
+    //
+    // THIS IS THE ONE SOURCE OF TRUTH for aliases — three consumers read it rather than restating it:
+    //   • tsc, from here directly.
+    //   • Vitest, via the `vite-tsconfig-paths` plugin in vitest.config.ts.
+    //   • Runtime, via `tsx` (Node's own resolver does NOT read tsconfig and will throw
+    //     ERR_MODULE_NOT_FOUND on an alias — which is why scripts run through tsx, not bare node).
+    // Add an alias here and all three follow. Restating it anywhere else reintroduces drift.
+    //
+    // No `baseUrl`: it is deprecated and stops functioning in TypeScript 7 (which this repo pins).
+    // Since TS 5 `paths` works without it — entries resolve relative to this tsconfig.json's own
+    // directory, which is why they are written as `./src/*`.
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    // `strict` turns the whole family on. The flags below are listed for discoverability, not to
+    // carve out exceptions — nothing here may weaken `strict`.
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Unused locals/parameters are Biome's job (`correctness/noUnusedVariables`,
+    // `correctness/noUnusedImports`), and it reports them with autofixes. Enabling them here too
+    // would double-report one finding across the gate's biome step and its typecheck step.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Required by the ESM + NodeNext setup: each file must be transpilable in isolation, because
+    // that is all Vitest's esbuild and Node's type-stripping ever see.
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  // Root-level config files are listed explicitly. Without them, `tsc --noEmit` silently skips the
+  // very files that configure the gate — a type error in vitest.config.ts would surface as a runtime
+  // failure instead of a typecheck failure. Add any future root config here too.
+  "include": ["src", "test", "scripts"{{#if usesVitest}}, "vitest.config.ts"{{/if}}],
+  "exclude": ["node_modules", "coverage"]
+}

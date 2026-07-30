@@ -1,0 +1,52 @@
+name: Claude Issue Agent
+
+# CALLER STUB — copy this into <your-repo>/.github/workflows/claude-issue-agent.yml
+#
+# Catches issue comments and manual dispatch, and delegates to the shared reusable
+# issue agent. Trigger by commenting on an issue:
+#   @claude-triage  -> triage: assessment comment + labels + duplicate scan
+#   @claude-spike   -> research spike: read-only deep investigation comment
+# or run it manually from the Actions tab with an issue number and a mode.
+#
+# Prerequisites (one-time):
+#   - Org secret CLAUDE_CODE_OAUTH_TOKEN_TOOLING shared to this repo (org admin).
+#   - Viaanix/vx-repo-tools Actions access allows org repos to use its workflows.
+#   - The label taxonomy the agent applies must already exist (it never creates
+#     labels): a type label set (bug / enhancement / question / documentation),
+#     any `area:*` labels you use, plus `needs-info`, `duplicate`, `triaged`.
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to run on"
+        required: true
+        type: string
+      mode:
+        description: "Which agent to run"
+        required: true
+        type: choice
+        options:
+          - triage
+          - spike
+
+concurrency:
+  # Serialize runs per issue; never cancel a run that may be mid-comment.
+  group: ${{ github.workflow }}-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    uses: Viaanix/vx-repo-tools/.github/workflows/claude-issue-agent.yml@v1
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      id-token: write
+    # inputs.* are empty on the issue_comment path (the reusable then gates on the
+    # comment body); populated on the workflow_dispatch path.
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      mode: ${{ inputs.mode }}
+    secrets: inherit

@@ -1,0 +1,30 @@
+{
+  // The PUBLISH build. Emits JavaScript into `dist/`, which is what ships.
+  //
+  // WHY A BUILD STEP EXISTS AT ALL. Node refuses to strip TypeScript types from files under
+  // `node_modules` — it throws ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING, by design, so that
+  // packages ship JavaScript rather than making every consumer pay a transform cost. An `npx
+  // slop-factory` install lands in `node_modules`, so publishing `.ts` cannot work no matter what the
+  // consumer's Node version is. Verified, not assumed.
+  //
+  // WHAT IS AND IS NOT COMPILED. Only the factory's own code. Everything under `modules/*/source/` is
+  // PAYLOAD — files copied byte-for-byte into generated projects, several of which are `.ts` that must
+  // stay `.ts`. `scripts/copy-dist-assets.ts` copies those (and the `.hbs` templates) into `dist/`
+  // afterwards, so `dist/` becomes a faithful mirror of the repo layout. That mirroring is what lets
+  // the plopfile keep resolving `modules/<name>/source` relative to its own directory, unchanged,
+  // whether it is running from source or from `dist/`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    // Pinned so the emitted tree mirrors the repo: `plopfile.ts` → `dist/plopfile.js`,
+    // `modules/base/module.ts` → `dist/modules/base/module.js`. Without it tsc infers the root from the
+    // common prefix of the inputs, which shifts the whole layout when the file set changes.
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": true
+  },
+  // Tests are not published. They import `vitest`, which is a devDependency, so shipping them would put
+  // an unresolvable import inside the tarball.
+  "exclude": ["node_modules", "dist", "modules/*/source", "tests", "**/*.test.ts", "scripts"]
+}

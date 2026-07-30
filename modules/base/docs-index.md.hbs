@@ -1,0 +1,32 @@
+# Documentation
+
+One document per module this project was generated with. Each explains **why** its part is configured
+the way it is — the reasoning that is otherwise only recoverable by reading the config and guessing.
+
+| Document | Covers |
+|---|---|
+{{! Triple-stache is REQUIRED here, not a style choice: the double form HTML-escapes its output, so a
+    summary containing a backtick or an apostrophe renders as `&#x60;` / `&#x27;` in the finished
+    markdown. These strings are prose destined for a .md file, never for HTML. }}
+{{#each documentedModules}}
+| [{{{title}}}]({{{fileName}}}) | {{{summary}}} |
+{{/each}}
+
+These are generated per project, so this index lists exactly what is here — not a superset describing
+options that were not selected.
+
+## Where else the reasoning lives
+
+- **[../CLAUDE.md](../CLAUDE.md)** — the agent-facing orientation: what to run, what is deliberately
+  absent, and the known caveats.
+- **[../README.md](../README.md)** — the human-facing entry point.
+- **`../.claude/rules/`** — the conventions themselves (naming, TypeScript patterns, Zod, options
+  objects, discipline, broken windows, memory). Each file states whether it is mechanically gated or
+  review-enforced.
+- **`../.claude/skills/`** — procedures rather than conventions, notably `test-quality` for writing and
+  reviewing tests.
+
+## If you change a configured behaviour, change its document
+
+A document describing a setting the project no longer has is worse than no document, because a reader —
+particularly an agent — will act on it. The docs are part of the change, not a follow-up to it.
