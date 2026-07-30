@@ -26,18 +26,30 @@ npx slop-factory --help
 npx slop-factory --version
 ```
 
+### What the output looks like
+
+[`examples/`](examples/) holds two real generated projects — [`examples/node`](examples/node) and
+[`examples/bun`](examples/bun) — so you can read the output without running anything. They are
+**generated artifacts**: edit the module that produces a file, then `npm run examples:refresh`.
+`examples:check` fails CI if they drift, because a stale example is a confident wrong answer. See
+[examples/README.md](examples/README.md) — including why you must not `npm install` inside one.
+
 ### Working on the factory itself
 
 ```bash
 npm install
-npm run generate        # builds, then runs the same CLI npx would run
-npm run typecheck       # typechecks the factory
-npm test                # fast unit tests: merge/render logic, registry invariants, source-tree guards
-npm run test:prompts    # reads the generator's prompt list and checks it against the contract
-npm run test:packaging  # builds + inspects the tarball npm publish would upload
-npm run verify          # slow: builds, then generates + installs + gates all 6 combinations
+npm run generate          # builds, then runs the same CLI npx would run
+npm run typecheck         # typechecks the factory
+npm test                  # fast unit tests: merge/render logic, registry invariants, source-tree guards
+npm run test:prompts      # reads the generator's prompt list and checks it against the contract
+npm run test:packaging    # builds + inspects the tarball npm publish would upload
+npm run examples:check    # fails if examples/ no longer matches the generator
+npm run examples:refresh  # rewrite examples/ from the current modules
+npm run verify            # slow: builds, then generates + installs + gates all 6 combinations
 KEEP_GENERATED_TREES=1 npm run verify   # same, but leaves the trees on disk to inspect
 ```
+
+`.github/workflows/ci.yml` runs all of the above on every push and pull request.
 
 **The factory always runs its built output, never its TypeScript source** — including in development.
 That is not a preference; two independent constraints force it, and both were measured:
@@ -230,9 +242,9 @@ and one place to change it. The summaries below are pointers, not the record.
 | [#1](https://github.com/vx-daniel/slop-factory/issues/1) | The `monorepo` module is unbuilt | `modules/monorepo/` is an empty, unregistered directory; single-package is the only layout offered |
 | [#2](https://github.com/vx-daniel/slop-factory/issues/2) | `generate` has no non-interactive mode | Requires a TTY; cannot run in CI or from a script |
 | [#3](https://github.com/vx-daniel/slop-factory/issues/3) | `bun + vitest` gets no `coverage-main.yml` | `COVERAGE.md` must be refreshed locally with `coverage:readme` |
-| [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | Placeholder `homepage`, no `repository` — blocks the first `npm publish` |
+| [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | No `repository` field — npm needs it for provenance; blocks the first `npm publish` |
 | [#5](https://github.com/vx-daniel/slop-factory/issues/5) | `bun test` coverage is blind to untested files | An untested `src/` file is absent from the report while the total reads 100% |
-| [#6](https://github.com/vx-daniel/slop-factory/issues/6) | No committed `examples/` | Generated output can only be seen by running the generator, so module changes have no visible diff |
+| [#7](https://github.com/vx-daniel/slop-factory/issues/7) | Deprecated `actions/checkout@v4` / `setup-node@v4` pins | Generated projects emit a Node 20 deprecation annotation on their first CI run |
 
 Two of these are worth understanding before choosing options at the prompt:
 
