@@ -107,7 +107,7 @@ every file.
 `useSortedClasses`, `noDuplicateClasses`, and `noUnknownAtRules` are Tailwind and CSS rules. The factory
 ships no CSS.
 
-## One rule kept that Biome does not have
+## Two rules configured that Biome does not have
 
 **`vitest/valid-expect` with `maxArgs: 2`.** Kept because its "async assertions must be awaited" half
 caught two real defects in this repo's own tests — `expect(promise).resolves.…` with no `await`.
@@ -119,6 +119,20 @@ whose `expect` takes one argument. Vitest's does not: `@vitest/expect/dist/index
 the default would have forced a choice between deleting every custom failure message in the suite (the
 generation tests carry command output in theirs) and disabling the rule outright, losing the await check
 with it.
+
+**`vitest/expect-expect` with `assertFunctionNames`.** Enabled by the `correctness` category rather than
+chosen, and listed explicitly only to declare this repo's assertion HELPERS. The rule flags a test whose
+body contains no `expect`, which is a correct default. But `tests/generation.test.ts` runs the same
+assertion pair against eight package-manager combinations, so the pair lives in a named helper
+(`expectOnlyThisManagersInstall`) — and the rule then reads every calling test as assertion-free.
+
+Naming the helper is a **declaration, not a relaxation**: it tells the rule where the assertions moved
+to. The alternative was inlining the pair into each caller, which is the duplication the helper removes.
+A helper added later must be named there too, otherwise its callers fail the rule — the intended
+behaviour, not a bug.
+
+Biome has no equivalent, so this is a place where the factory's own gate is *stricter* than the Biome
+gate it prescribes for generated projects.
 
 ## What is not linted, and why
 

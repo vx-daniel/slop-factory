@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import nodePlop from 'node-plop'
-import { PROJECT_RUNTIMES, TEST_RUNNERS } from '../modules/module-contract.js'
+import { PACKAGE_MANAGERS, TEST_RUNNERS } from '../modules/module-contract.js'
 import { resolvePlopfilePath } from '../plopfile-path.js'
 
 /**
@@ -20,7 +20,7 @@ import { resolvePlopfilePath } from '../plopfile-path.js'
 const REQUIRED_PROMPT_NAMES = [
   'projectName',
   'projectPath',
-  'projectRuntime',
+  'packageManager',
   'testRunner',
   'enableFeatures',
 ]
@@ -46,16 +46,16 @@ describe('generator prompts', () => {
     }
   })
 
-  it('offers exactly the runtimes the contract declares', async () => {
-    // A choice value that drifts from PROJECT_RUNTIMES selects no runtime module at all, because
+  it('offers exactly the package managers the contract declares', async () => {
+    // A choice value that drifts from PACKAGE_MANAGERS selects no manager module at all, because
     // selection is an equality test. The answer would be a valid-looking string that matches nothing.
     const prompts = await loadGeneratorPrompts()
-    const runtimePrompt = prompts.find((prompt) => prompt.name === 'projectRuntime')
+    const managerPrompt = prompts.find((prompt) => prompt.name === 'packageManager')
 
-    expect(runtimePrompt, 'the projectRuntime prompt is missing').toBeDefined()
-    const offeredValues = (runtimePrompt?.choices ?? []).map((choice) => choice.value)
+    expect(managerPrompt, 'the packageManager prompt is missing').toBeDefined()
+    const offeredValues = (managerPrompt?.choices ?? []).map((choice) => choice.value)
 
-    expect(offeredValues.slice().sort()).toEqual([...PROJECT_RUNTIMES].sort())
+    expect(offeredValues.slice().sort()).toEqual([...PACKAGE_MANAGERS].sort())
   })
 
   it('offers exactly the test runners the contract declares', async () => {
@@ -82,15 +82,16 @@ describe('generator prompts', () => {
     )
   })
 
-  it('asks the test-runner question only under Bun', async () => {
-    // Under Node there is exactly one possible answer, and a question with one answer is noise.
+  it('asks the test-runner question only for the bun manager', async () => {
+    // For npm and pnpm there is exactly one possible answer, and a question with one answer is noise.
     const prompts = await loadGeneratorPrompts()
     const testRunnerPrompt = prompts.find((prompt) => prompt.name === 'testRunner') as
       | (PromptDescriptor & { when?: (answers: Record<string, unknown>) => boolean })
       | undefined
 
     expect(typeof testRunnerPrompt?.when).toBe('function')
-    expect(testRunnerPrompt?.when?.({ projectRuntime: 'bun' })).toBe(true)
-    expect(testRunnerPrompt?.when?.({ projectRuntime: 'node' })).toBe(false)
+    expect(testRunnerPrompt?.when?.({ packageManager: 'bun' })).toBe(true)
+    expect(testRunnerPrompt?.when?.({ packageManager: 'npm' })).toBe(false)
+    expect(testRunnerPrompt?.when?.({ packageManager: 'pnpm' })).toBe(false)
   })
 })

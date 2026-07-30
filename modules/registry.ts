@@ -5,6 +5,8 @@ import { configModule } from './config/module.js'
 import { gateModule } from './gate/module.js'
 import type { ProjectModule } from './module-contract.js'
 import { nodeModule } from './node/module.js'
+import { npmModule } from './npm/module.js'
+import { pnpmModule } from './pnpm/module.js'
 import { vitestModule } from './vitest/module.js'
 
 /**
@@ -16,11 +18,16 @@ import { vitestModule } from './vitest/module.js'
  * reordering this list cannot silently change a generated project. Registered roughly outside-in:
  * the always-on modules, then the runtime choice, then the test-runner choice, then opt-in features.
  *
- * TWO PAIRS ARE MUTUALLY EXCLUSIVE and the registry does not enforce that — the `isSelected`
- * predicates do, keyed off a single answer each. `node`/`bun` key off `projectRuntime`; `vitest`/
- * `bun-test` off `testRunner`. `registry.test.ts` asserts exactly one of each pair is ever selected,
- * because two selected runtimes would contribute conflicting `engines` and two selected test runners
- * would conflict on the `test` script.
+ * TWO SETS ARE MUTUALLY EXCLUSIVE — a TRIPLE and a PAIR — and the registry does not enforce that; the
+ * `isSelected` predicates do, keyed off a single answer each. `npm`/`pnpm`/`bun` key off
+ * `packageManager`, and `vitest`/`bun-test` off `testRunner`. `registry.test.ts` asserts exactly one
+ * manager and exactly one runner is ever selected, because two selected managers would contribute
+ * conflicting `engines` and two selected test runners would conflict on the `test` script.
+ *
+ * `node` IS THE EXCEPTION, and it is worth being explicit because it reads like a fourth manager: it is
+ * selected ALONGSIDE npm or pnpm rather than instead of them, keyed off the runtime those managers imply.
+ * It carries the two things both need and nothing else — the Node engine floor and tsx. A third Node
+ * manager would join the same arrangement without touching it.
  *
  * NOT REGISTERED: `monorepo`. The directory exists but the module is deliberately unbuilt, because
  * the workspace conversion is not expressible in this contract's two channels — it must REWRITE
@@ -38,6 +45,8 @@ export const PROJECT_MODULES: readonly ProjectModule[] = [
   baseModule,
   gateModule,
   nodeModule,
+  npmModule,
+  pnpmModule,
   bunModule,
   vitestModule,
   bunTestModule,

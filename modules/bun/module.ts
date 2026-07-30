@@ -1,11 +1,19 @@
-import type { PackageJsonFragment, ProjectAnswers, ProjectModule } from '../module-contract.js'
+import {
+  type PackageJsonFragment,
+  type ProjectAnswers,
+  type ProjectModule,
+  typescriptRunnerPrefix,
+} from '../module-contract.js'
 
 /** Bun 1.3 is the floor: the measurements behind this path (native `.ts` execution, native tsconfig
  * `paths` resolution, Vitest interop) were taken on 1.3.14. */
 const BUN_ENGINE_RANGE = '>=1.3'
 
 /**
- * The Bun runtime module — selected when `projectRuntime` is `bun`.
+ * Bun as BOTH runtime and package manager — selected when `packageManager` is `bun`.
+ *
+ * Unlike npm and pnpm, Bun does not pair with a separate runtime module: for Bun the two genuinely are
+ * one choice, which is why this module carries the engine floor as well as the manager vocabulary.
  *
  * Deliberately the thinnest module in the factory, and that thinness is the finding: adopting Bun
  * needs almost nothing ADDED. Bun runs `.ts` natively and resolves tsconfig `paths` natively, so the
@@ -34,19 +42,26 @@ export const bunModule: ProjectModule = {
   },
 
   isSelected(answers: ProjectAnswers): boolean {
-    return answers.projectRuntime === 'bun'
+    return answers.packageManager === 'bun'
   },
 
   /**
-   * Deliberately does NOT contribute `hasCoverageWorkflow`. A missing key is falsy in Handlebars, which
-   * is the correct answer: `coverage-main.yml` is npm-specific and ships from the node module, so a Bun
-   * project refreshes COVERAGE.md locally instead.
+   * Deliberately says nothing about `coverage-main.yml`. That workflow and the `hasCoverageWorkflow`
+   * flag are both owned by the `vitest` module, which declines to emit either under Bun — so a Bun
+   * project refreshes COVERAGE.md locally instead. See issue #3.
    */
-  templateData(): Readonly<Record<string, unknown>> {
+  templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {
     return {
       isBunRuntime: true,
+      typescriptRunner: typescriptRunnerPrefix(answers.packageManager),
       runCommand: 'bun run',
       installCommand: 'bun install',
+      // `--frozen-lockfile` is the `npm ci` equivalent: it fails rather than silently resolving a tree
+      // that differs from what bun.lock records, so CI cannot pass against versions nobody installed.
+      ciInstallCommand: 'bun install --frozen-lockfile',
+      execCommand: 'bunx',
+      committedLockfile: 'bun.lock',
+      ignoredLockfiles: ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'],
     }
   },
 

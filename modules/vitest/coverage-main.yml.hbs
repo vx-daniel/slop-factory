@@ -1,0 +1,79 @@
+# Refresh the committed COVERAGE.md after a push to main.
+#
+# WHY THIS LIVES IN THE VITEST MODULE. It is Vitest-specific: it reads the `json-summary` reporter's
+# output, which `bun test` does not produce. It used to be npm-specific too and therefore lived in the
+# node module, but the install steps are now interpolated from the selected manager, so the only real
+# dependency left is the test runner.
+#
+# It still only ships for the Node managers. That gate lives in the vitest module's `renderedTemplates()`
+# rather than in a template flag, because whether this FILE EXISTS is not something the template itself
+# can decide. It is a limitation rather than a necessity — nothing here would break under bun + Vitest,
+# it simply has not been verified there. See issue #3.
+#
+# COVERAGE.md is a committed snapshot of coverage at the tip of main. The per-PR gate
+# (scripts/gate.ts / `{{runCommand}} check:all`) enforces the coverage floor but does NOT freshness-check
+# COVERAGE.md — doing that per-PR caused serial merge conflicts between in-flight PRs (each would
+# regenerate + commit it). Instead this job regenerates it once, after the merge lands on main, and
+# commits the result back, so the file always matches main's real coverage without blocking PRs.
+#
+# It commits ONLY when the coverage *data* changed: `coverage-to-markdown.ts --check` compares the
+# committed doc against a fresh build while ignoring the volatile "generated at <sha>/<time>" header,
+# so an unchanged coverage profile produces no commit (no per-merge churn). Pushes made with the
+# default GITHUB_TOKEN don't re-trigger workflows, and the commit carries `[skip ci]` as belt-and-braces.
+name: Coverage (main)
+
+on:
+  push:
+    branches: [main]
+
+# Serialize: two quick successive merges must not race on the commit-back.
+concurrency:
+  group: coverage-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+{{#if usesPnpm}}
+      # Before setup-node: `cache: pnpm` needs pnpm already on PATH. See ci.yml.hbs.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+{{/if}}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24' # matches the local toolchain (TypeScript 7, tsx)
+          cache: {{nodeCacheKey}}
+
+      - name: Install dependencies
+        run: {{ciInstallCommand}}
+
+      # Vitest ALONE, deliberately — not the `coverage` npm script. That script also regenerates
+      # COVERAGE.md, which would make the `--check` below always report "unchanged" and nothing would
+      # ever be committed. This step only writes coverage/coverage-summary.json and enforces the
+      # thresholds (a below-floor main fails here — red main, no COVERAGE.md bump). No pre-build step:
+      # Vitest handles TS via esbuild.
+      - name: Generate coverage data
+        run: {{execCommand}} vitest run --coverage
+
+      # Commit COVERAGE.md back only when the coverage data actually changed. `--check` ignores the
+      # volatile header, so an identical coverage profile is a no-op.
+      - name: Commit refreshed COVERAGE.md when coverage changed
+        run: |
+          if {{typescriptRunner}} scripts/coverage-to-markdown.ts --check; then
+            echo "COVERAGE.md already reflects current coverage — nothing to commit."
+            exit 0
+          fi
+          {{typescriptRunner}} scripts/coverage-to-markdown.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add COVERAGE.md
+          git commit -m "chore(coverage): refresh COVERAGE.md [skip ci]"
+          git push

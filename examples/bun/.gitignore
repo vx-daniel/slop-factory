@@ -1,10 +1,11 @@
 node_modules
 
-# Lockfiles. EXACTLY ONE is committed, and which one depends on the runtime this project was
-# generated for. Two committed lockfiles for one package.json is the failure this prevents: they
-# resolve independently and drift, and nobody notices until a version differs between a teammate's
-# install and CI.
-# This project targets Bun, so bun.lock is COMMITTED and every other manager's lockfile is ignored.
+# Lockfiles. EXACTLY ONE is committed — bun.lock, for the Bun toolchain this
+# project was generated for. Every other manager's is ignored.
+#
+# Two committed lockfiles for one package.json is the failure this prevents: they resolve independently
+# and drift, and nobody notices until a version differs between a teammate's install and CI. If you
+# switch managers, invert this — commit the new one and ignore bun.lock. Do not simply add.
 package-lock.json
 pnpm-lock.yaml
 yarn.lock

@@ -1,7 +1,9 @@
 import {
+  isBunRuntime,
   type PackageJsonFragment,
   type ProjectAnswers,
   type ProjectModule,
+  type RenderedTemplate,
   typescriptRunnerPrefix,
 } from '../module-contract.js'
 
@@ -31,12 +33,46 @@ export const vitestModule: ProjectModule = {
     return answers.testRunner === 'vitest'
   },
 
-  templateData(): Readonly<Record<string, unknown>> {
-    return { usesVitest: true }
+  /**
+   * `coverage-main.yml`, and only for the Node managers.
+   *
+   * The gate is HERE rather than in template data because this is a question about whether the file
+   * exists at all, and template data can only make a file's contents conditional. A flag cannot decline
+   * to create a file.
+   *
+   * Restricting it to Node is a limitation, not a necessity — issue #3. Nothing in the workflow would
+   * break under bun + Vitest now that the install steps are interpolated; it simply has not been
+   * verified there, and shipping an unverified push-to-main workflow that commits back to the repository
+   * is a worse failure than not shipping it.
+   */
+  renderedTemplates(answers: ProjectAnswers): readonly RenderedTemplate[] {
+    if (isBunRuntime(answers.packageManager)) {
+      return []
+    }
+    return [
+      {
+        templateFile: 'modules/vitest/coverage-main.yml.hbs',
+        outputPath: '.github/workflows/coverage-main.yml',
+      },
+    ]
+  },
+
+  /**
+   * `hasCoverageWorkflow` is owned here, alongside the template it describes, so the prose in the
+   * generated README and CLAUDE.md cannot claim a workflow that `renderedTemplates` above declined to
+   * emit. It was briefly owned by the `node` module, which happened to agree — Node always implies
+   * Vitest — but that agreement was a coincidence of the two conditions, and `mergeTemplateData`
+   * permits identical values from two modules, so a later divergence would have been silent.
+   */
+  templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {
+    return {
+      usesVitest: true,
+      hasCoverageWorkflow: !isBunRuntime(answers.packageManager),
+    }
   },
 
   packageJsonFragment(answers: ProjectAnswers): PackageJsonFragment {
-    const runnerPrefix = typescriptRunnerPrefix(answers.projectRuntime)
+    const runnerPrefix = typescriptRunnerPrefix(answers.packageManager)
 
     return {
       scripts: {

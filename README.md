@@ -16,8 +16,8 @@ npx slop-factory generate
 ```
 
 That is the whole thing — no clone, no install. Prompts, in order: project name (also the directory
-name), destination directory (**defaults to `.`**, must already exist), runtime (Node 24 + npm, or Bun),
-**test runner (asked only under Bun)**, and optional features. Nothing is written until every question is
+name), destination directory (**defaults to `.`**, must already exist), package manager (**npm**, **pnpm**
+or **bun** — which also decides the runtime), **test runner (asked only for bun)**, and optional features. Nothing is written until every question is
 answered, and it refuses to generate into a non-empty directory — so accepting every default puts the
 project in a new subdirectory of wherever you ran it.
 
@@ -28,8 +28,9 @@ npx slop-factory --version
 
 ### What the output looks like
 
-[`examples/`](examples/) holds two real generated projects — [`examples/node`](examples/node) and
-[`examples/bun`](examples/bun) — so you can read the output without running anything. They are
+[`examples/`](examples/) holds three real generated projects, one per package manager —
+[`examples/npm`](examples/npm), [`examples/pnpm`](examples/pnpm) and [`examples/bun`](examples/bun) — so
+you can read the output without running anything. They are
 **generated artifacts**: edit the module that produces a file, then `npm run examples:refresh`.
 `examples:check` fails CI if they drift, because a stale example is a confident wrong answer. See
 [examples/README.md](examples/README.md) — including why you must not `npm install` inside one.
@@ -111,9 +112,16 @@ to a module descriptor — `CLAUDE.md.hbs`, `README.md.hbs`, `gitignore.hbs`, `t
 `docs-index.md.hbs` — so a file cannot be rendered by accident. Each was moved out of `source/` only
 after confirming it contains no `{{ }}` of its own.
 
-This is also why **`ci.yml` is duplicated** across the `node` and `bun` modules rather than templated:
-it needs a different setup action and install command per runtime, and it contains `${{ }}`. Two
-genuinely different files beat one file with escaped mustaches.
+**`ci.yml` is the one exception, and it earns it.** It contains `${{ }}`, so it was originally one
+verbatim copy per manager — but a third manager would have meant a third near-identical 50-line file, so
+it is now a single `base/ci.yml.hbs` that interpolates the two things that actually vary: the setup steps
+and the install command. The GitHub expressions survive because the template escapes them as
+`$\{{ github.ref }}`, and `tests/generation.test.ts` asserts the generated file still contains
+`${{ github.ref }}` intact — so breaking the escape fails the suite rather than shipping a workflow with a
+bare `$` in it.
+
+The general rule still holds: prefer the copy channel, and reach for an escaped template only when the
+duplication it replaces is worse than the escaping it introduces.
 
 **`source/` mirrors its own output layout.** `gate/source/scripts/gate.ts` lands at `scripts/gate.ts`.
 That convention is the entire mapping — to know where a file ends up, read its path under `source/`.
@@ -132,24 +140,32 @@ paths are unique, and that the declared file actually exists.
 
 ## The modules
 
-Seven modules on three axes: two always-on, one of two runtimes, one of two test runners, plus opt-in
-features.
+Nine modules on three axes: two always-on, one of three package managers (plus the runtime it implies),
+one of two test runners, plus opt-in features.
 
 | Module | Selected when | Owns |
 |---|---|---|
-| `base` | always | tsconfig, `.claude/` rules + skills, pre-commit hook, the org workflow stubs, `@types/node` |
+| `base` | always | tsconfig, `.claude/` rules + skills, pre-commit hook, the org workflow stubs, `@types/node`, the rendered `ci.yml` |
 | `gate` | always | Biome, the naming plugin, TypeScript, `scripts/gate.ts`, the check scripts |
-| `node` | runtime = node | Node 24 engine floor, tsx, the npm `ci.yml` + `coverage-main.yml` |
-| `bun` | runtime = bun | Bun engine floor, the Bun `ci.yml` |
-| `vitest` | runner = vitest | `vitest.config.ts`, the 4-metric floor, the `COVERAGE.md` pipeline |
+| `node` | manager is npm or pnpm | Node 24 engine floor, tsx |
+| `npm` | manager = npm | `npm ci`, `package-lock.json`, `npx` |
+| `pnpm` | manager = pnpm | `pnpm install --frozen-lockfile`, `pnpm-lock.yaml`, `pnpm exec`, the extra CI setup step |
+| `bun` | manager = bun | Bun engine floor, and the Bun manager vocabulary — for Bun the two are one choice |
+| `vitest` | runner = vitest | `vitest.config.ts`, the 4-metric floor, the `COVERAGE.md` pipeline, `coverage-main.yml` |
 | `bun-test` | runner = bun-test | `bunfig.toml`, the `vitest` type shim, the floor-guard test |
 | `config` | `config` feature | Layered TOML config, Zod schema, `src/config/`, `.env.example` |
 
-`node`/`bun` and `vitest`/`bun-test` are each mutually exclusive, enforced by their `isSelected`
-predicates keyed off a single answer. `registry.test.ts` asserts exactly one of each pair is ever
-selected, because two runtimes would conflict on `engines` and two runners on the `test` script.
+`npm`/`pnpm`/`bun` are mutually exclusive, and so are `vitest`/`bun-test` — enforced by their
+`isSelected` predicates, each keyed off a single answer. `registry.test.ts` asserts exactly one manager
+and exactly one runner is ever selected, because two managers would conflict on `engines` and two runners
+on the `test` script.
 
-Three placements are deliberate and look wrong at first glance:
+`node` is the one module that is **not** part of a mutually exclusive set: it is selected alongside
+whichever of `npm`/`pnpm` was chosen, because both mean the Node runtime and both need exactly the same
+two things — the engine floor and tsx. Giving each manager its own copy would duplicate them, and a third
+Node manager would duplicate them again.
+
+Five placements are deliberate and look wrong at first glance:
 
 - **The test runner is not a runtime concern.** Bun ships its own runner, so it looks like one — but the
   choice is genuinely orthogonal: you can run on Bun and keep Vitest, which is the default. That is why
@@ -158,12 +174,19 @@ Three placements are deliberate and look wrong at first glance:
   tsconfig `paths` natively, so the whole tsx layer drops out — there is nothing to install in its place.
 - **`@types/node` is in `base`, not `node`.** The shipped tsconfig sets `"types": ["node"]`, so omitting
   it fails `tsc --noEmit` under either runtime.
-- **`coverage-main.yml` is in `node`, not `vitest`,** even though it is a Vitest workflow. It is *both*
-  Vitest-specific (`npx vitest run --coverage`) and npm-specific (`actions/setup-node`, `npm ci`), and
-  **node always implies Vitest** because the runner prompt is skipped under Node — so the node module is
-  the one place both facts hold unconditionally. Leaving it in `vitest` shipped `npm ci` into Bun
-  projects whose `.gitignore` excludes `package-lock.json`: red on every push to main. A `bun + vitest`
-  project therefore has no auto-refresh workflow and runs `coverage:readme` locally instead.
+- **`ci.yml` is in `base`, not the manager modules,** even though installing dependencies is the most
+  manager-specific thing a workflow does. It used to be one verbatim copy per manager; the parts that
+  actually vary are the setup steps and the install command, so it is now a single rendered template that
+  interpolates vocabulary the manager modules contribute. Three near-identical 50-line copies was the
+  alternative. This makes `ci.yml` the one workflow where the Handlebars / GitHub Actions `{{ }}`
+  collision is live, which is why the template escapes `${{ github.ref }}` and a test asserts it survives.
+- **`coverage-main.yml` is in `vitest`, and its Node-only gate lives in `renderedTemplates()`** rather
+  than in a template flag. The file is Vitest-specific — it reads the `json-summary` reporter's output,
+  which `bun test` does not produce — but whether it ships is a question about the file *existing*, and
+  template data can only make contents conditional, never decline to create a file. It ships for the Node
+  managers only; that is an unverified-under-Bun limitation, not a necessity
+  ([#3](https://github.com/vx-daniel/slop-factory/issues/3)), so a `bun + vitest` project runs
+  `coverage:readme` locally instead.
 
 ### The `bun test` trade, and why it is offered anyway
 
@@ -194,8 +217,9 @@ gate failed, which is the worst kind of split.
 6. Add the combination to `COMBINATIONS` in `tests/generation.test.ts`, then run `npm test` and
    `npm run verify`.
 
-A module with no `source/` tree is legitimate in principle, though every current module has one — the
-runtime modules would otherwise contribute only fragments.
+A module with no `source/` tree is legitimate: `npm` and `pnpm` have one only because every module must
+document itself. Otherwise they would contribute nothing but template data — the install command, the
+committed lockfile, the `setup-node` cache key — which is exactly what a manager module is for.
 
 **package.json conflicts throw, they do not last-write-wins.** Two modules claiming the same script
 name, or pinning one dependency to different versions, is a factory bug: silently picking one would
@@ -252,7 +276,7 @@ and one place to change it. The summaries below are pointers, not the record.
 | [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | No `repository` field — npm needs it for provenance; blocks the first `npm publish` |
 | [#5](https://github.com/vx-daniel/slop-factory/issues/5) | `bun test` coverage is blind to untested files | An untested `src/` file is absent from the report while the total reads 100% |
 | [#7](https://github.com/vx-daniel/slop-factory/issues/7) | Deprecated `actions/checkout@v4` / `setup-node@v4` pins | Generated projects emit a Node 20 deprecation annotation on their first CI run |
-| [#10](https://github.com/vx-daniel/slop-factory/issues/10) | Package manager is tied to the runtime | Only npm and bun are offered; pnpm and yarn are unsupported, though the generated gate already detects all four. Also why a Bun project's pre-commit hook still invokes `npm run check:all` while its CI invokes `bun run check:all`. |
+| [#10](https://github.com/vx-daniel/slop-factory/issues/10) | yarn is not offered | npm, pnpm and bun are. The generated gate's `detectPackageManager()` recognises yarn, so a project can be migrated by hand, but the generator neither produces nor verifies that combination. |
 
 Two of these are worth understanding before choosing options at the prompt:
 

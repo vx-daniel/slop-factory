@@ -2,6 +2,12 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { PROJECT_MODULES } from '../modules/registry.js'
+import {
+  isBunRuntime,
+  PACKAGE_MANAGERS,
+  TEST_RUNNERS,
+  type ProjectAnswers,
+} from '../modules/module-contract.js'
 
 /**
  * Asserts the PUBLISHED artifact is complete — the tarball `npm publish` would upload.
@@ -64,6 +70,54 @@ const FORBIDDEN_PATH_PREFIXES = [
   'plopfile.ts',
 ]
 
+/**
+ * Every answer combination the prompts can reach.
+ *
+ * `bun-test` is excluded for npm and pnpm because `bun test` ships with the Bun runtime and the prompt is
+ * skipped there — so those combinations are unreachable and asserting against them would describe a
+ * generator that does not exist.
+ */
+const REACHABLE_ANSWERS: readonly ProjectAnswers[] = PACKAGE_MANAGERS.flatMap((packageManager) =>
+  TEST_RUNNERS.filter(
+    (testRunner) => testRunner === 'vitest' || isBunRuntime(packageManager),
+  ).map((testRunner) => ({
+    projectName: 'irrelevant',
+    projectPath: '/tmp',
+    packageManager,
+    testRunner,
+    enableFeatures: ['config'],
+  })),
+)
+
+/**
+ * Every `.hbs` file any module can declare, across every reachable answer combination.
+ *
+ * DERIVED rather than listed, and that is the point. This was a hardcoded array of five base-module
+ * filenames, which made the test's own name ("every rendered template") false the moment a template was
+ * added: `base/ci.yml.hbs` and `vitest/coverage-main.yml.hbs` were both absent from it, and the hardcoded
+ * `dist/modules/base/` prefix meant a non-base module's template could not have been checked even if
+ * someone had remembered to add it.
+ *
+ * The union across combinations matters because a module may decline to emit a template for some
+ * answers — `vitest` returns none under Bun — so no single combination sees them all.
+ */
+function everyDeclaredTemplateFile(): string[] {
+  const templateFiles = new Set<string>()
+
+  for (const answers of REACHABLE_ANSWERS) {
+    for (const projectModule of PROJECT_MODULES) {
+      if (!projectModule.isSelected(answers)) {
+        continue
+      }
+      for (const template of projectModule.renderedTemplates?.(answers) ?? []) {
+        templateFiles.add(template.templateFile)
+      }
+    }
+  }
+
+  return [...templateFiles].sort()
+}
+
 let packedPaths: string[]
 
 beforeAll(() => {
@@ -118,15 +172,20 @@ describe('published tarball', () => {
   it('includes every rendered template the generator adds', () => {
     // These are resolved by `templateFile` at generation time, so a missing one fails only when a
     // consumer runs the tool — the exact failure this suite exists to move earlier.
-    for (const templateName of [
-      'CLAUDE.md.hbs',
-      'README.md.hbs',
-      'docs-index.md.hbs',
-      'gitignore.hbs',
-      'tsconfig.json.hbs',
-    ]) {
-      expect(packedPaths, `${templateName} missing from the tarball`).toContain(
-        `dist/modules/base/${templateName}`,
+    //
+    // `templateFile` is relative to the plopfile's directory, and the published plopfile is
+    // `dist/plopfile.js`, so the packed path is the declared path under `dist/`. Asserting that exact
+    // string is what ties the two halves together: the copier could place a template somewhere real and
+    // the generator would still fail to resolve it.
+    const declaredTemplateFiles = everyDeclaredTemplateFile()
+
+    // Guards the derivation itself. If a refactor made `renderedTemplates` return nothing, every
+    // assertion below would vacuously pass and the test would report green on an empty package.
+    expect(declaredTemplateFiles.length, 'no module declares any rendered template').toBeGreaterThan(0)
+
+    for (const templateFile of declaredTemplateFiles) {
+      expect(packedPaths, `${templateFile} missing from the tarball`).toContain(
+        `dist/${templateFile}`,
       )
     }
   })

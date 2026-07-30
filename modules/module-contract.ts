@@ -1,14 +1,17 @@
 /**
  * The contract every generator module implements.
  *
- * A module contributes to a generated project through exactly TWO channels, and the split is
- * load-bearing rather than stylistic:
+ * A module contributes through four channels. The first two are files; the last two are merged data:
  *
  *   1. `<module>/source/` — copied VERBATIM, byte for byte, never rendered.
- *   2. `packageJsonFragment()` — merged into the generated package.json.
+ *   2. `renderedTemplates()` — `.hbs` files run through Handlebars, output path included.
+ *   3. `packageJsonFragment()` — merged into the generated package.json.
+ *   4. `templateData()` — merged into the data every rendered template sees.
  *
- * WHY THE SOURCE TREE IS NEVER RENDERED. Handlebars and GitHub Actions both claim `{{ }}`.
- * `modules/node/source/.github/workflows/ci.yml` contains `${{ github.ref }}`; run that through
+ * The verbatim/rendered split in 1 vs 2 is load-bearing rather than stylistic.
+ *
+ * WHY THE SOURCE TREE IS NEVER RENDERED. Handlebars and GitHub Actions both claim `{{ }}`. A workflow
+ * containing `${{ github.ref }}` run through
  * Handlebars and `{{ github.ref }}` resolves against the answers object, finds nothing, and emits an
  * empty string — leaving a bare `$` and a silently broken workflow that installs and typechecks
  * fine, then fails only in CI. So the copy channel does no template evaluation at all. Anything
@@ -21,16 +24,41 @@
  * where a file ends up, read its path under `source/`.
  */
 
-/** The runtimes a generated project can target. Selected by the `projectRuntime` prompt. */
-export const PROJECT_RUNTIMES = ['node', 'bun'] as const
-export type ProjectRuntime = (typeof PROJECT_RUNTIMES)[number]
+/**
+ * The package managers a generated project can use. Selected by the `packageManager` prompt.
+ *
+ * THIS IS ONE AXIS, NOT TWO. The manager also determines the runtime, because the two are not
+ * independent in any combination worth shipping:
+ *
+ *   npm  → Node, `.ts` executed through tsx, `package-lock.json` committed
+ *   pnpm → Node, `.ts` executed through tsx, `pnpm-lock.yaml` committed
+ *   bun  → Bun, `.ts` executed natively (no loader), `bun.lock` committed
+ *
+ * Modelling manager and runtime as separate axes would produce a 3×2 grid whose exotic cells — Bun as
+ * a package manager for a Node-executed project, pnpm installing for a Bun runtime — nobody asked for
+ * and none of which the factory could claim to have verified. Deriving the runtime keeps the prompt to
+ * one question and the generation matrix to a size CI can actually install and gate.
+ *
+ * The trade is real: if someone wants `bun install` with the Node runtime, this does not offer it.
+ * That is a deliberate narrowing, not an oversight.
+ *
+ * yarn is deliberately absent. The generated gate's `detectPackageManager()` recognises it, so a
+ * project can be migrated by hand, but the generator does not produce or verify that combination.
+ */
+export const PACKAGE_MANAGERS = ['npm', 'pnpm', 'bun'] as const
+export type PackageManager = (typeof PACKAGE_MANAGERS)[number]
+
+/** Whether a manager implies the Bun runtime — the one place that mapping is written down. */
+export function isBunRuntime(packageManager: PackageManager): boolean {
+  return packageManager === 'bun'
+}
 
 /**
  * The test runners a generated project can use.
  *
- * Only meaningful under Bun — `bun test` does not exist for Node, so a Node project is always
- * `vitest`. The generator forces that rather than asking, because a question with one possible answer
- * is noise.
+ * Only meaningful when the manager is `bun` — `bun test` ships with the Bun runtime and does not exist
+ * for Node, so an npm or pnpm project is always `vitest`. The generator forces that rather than asking,
+ * because a question with one possible answer is noise.
  */
 export const TEST_RUNNERS = ['vitest', 'bun-test'] as const
 export type TestRunner = (typeof TEST_RUNNERS)[number]
@@ -64,8 +92,8 @@ export const DEFAULT_TEST_RUNNER: TestRunner = 'vitest'
 export interface ProjectAnswers {
   readonly projectName: string
   readonly projectPath: string
-  readonly projectRuntime: ProjectRuntime
-  /** Always `vitest` when `projectRuntime` is `node`, since `bun test` needs Bun. */
+  readonly packageManager: PackageManager
+  /** Always `vitest` unless `packageManager` is `bun`, since `bun test` ships with the Bun runtime. */
   readonly testRunner: TestRunner
   /** Values of the opt-in feature checkboxes, e.g. `['config']`. */
   readonly enableFeatures: readonly string[]
@@ -209,18 +237,21 @@ export function mergeTemplateData(
 }
 
 /**
- * How a `.ts` file is executed under the selected runtime.
+ * How a `.ts` file is executed, given the selected package manager.
  *
  * Node cannot run this blueprint's TypeScript directly: Node's resolver does not read tsconfig
  * `paths`, so the first `@/*` import throws ERR_MODULE_NOT_FOUND. tsx supplies that resolution,
  * which is why the prefix is `node --import tsx` and not bare `node`. Bun runs `.ts` and resolves
  * tsconfig `paths` natively, so it needs no loader.
  *
- * Shared here because both the gate module (`check:all`) and the runtime modules (`coverage`) build
+ * Takes the MANAGER rather than a runtime because the manager is the axis the operator chooses; the
+ * runtime follows from it (see `PACKAGE_MANAGERS`). npm and pnpm both mean Node, so both get tsx.
+ *
+ * Shared here because the gate module (`check:all`) and the vitest module (`coverage`) both build
  * script commands from it, and a second copy of this string is a drift waiting to happen.
  */
-export function typescriptRunnerPrefix(runtime: ProjectRuntime): string {
-  return runtime === 'bun' ? 'bun' : 'node --import tsx'
+export function typescriptRunnerPrefix(packageManager: PackageManager): string {
+  return isBunRuntime(packageManager) ? 'bun' : 'node --import tsx'
 }
 
 /**

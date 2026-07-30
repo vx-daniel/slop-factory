@@ -183,10 +183,12 @@ describe('mergeTemplateData', () => {
 })
 
 describe('typescriptRunnerPrefix', () => {
-  it('routes Node through tsx, because Node cannot resolve tsconfig paths alone', () => {
+  it('routes every Node manager through tsx', () => {
     // Bare `node` throws ERR_MODULE_NOT_FOUND on the first `@/*` import, and generated projects ship
-    // those aliases — so this prefix is load-bearing, not ceremony.
-    expect(typescriptRunnerPrefix('node')).toBe('node --import tsx')
+    // those aliases — so this prefix is load-bearing, not ceremony. npm and pnpm both mean Node, so a
+    // manager added to that group must land here too rather than silently getting bare `node`.
+    expect(typescriptRunnerPrefix('npm')).toBe('node --import tsx')
+    expect(typescriptRunnerPrefix('pnpm')).toBe('node --import tsx')
   })
 
   it('runs Bun directly, since it resolves tsconfig paths natively', () => {

@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import nodePlop from 'node-plop'
 import { resolvePlopfilePath } from '../plopfile-path.js'
-import type { ProjectRuntime, TestRunner } from '../modules/module-contract.js'
+import type { PackageManager, TestRunner } from '../modules/module-contract.js'
 
 /**
  * Resolved at MODULE LOAD, not per call — so importing this helper throws if the factory has not been
@@ -16,7 +16,7 @@ const GENERATOR_NAME = 'generate'
 export interface GenerationRequest {
   readonly projectName: string
   readonly workspaceDirectory: string
-  readonly projectRuntime: ProjectRuntime
+  readonly packageManager: PackageManager
   readonly testRunner: TestRunner
   readonly enableFeatures: readonly string[]
 }
@@ -41,7 +41,7 @@ export async function generateProject(request: GenerationRequest): Promise<strin
   const result = await generator.runActions({
     projectName: request.projectName,
     projectPath: request.workspaceDirectory,
-    projectRuntime: request.projectRuntime,
+    packageManager: request.packageManager,
     testRunner: request.testRunner,
     enableFeatures: [...request.enableFeatures],
   })
@@ -82,9 +82,18 @@ export function runCommand(options: {
  */
 export const shouldKeepGeneratedTrees = process.env.KEEP_GENERATED_TREES !== undefined
 
-/** Whether a runtime's binary is on PATH, so an absent Bun is skipped rather than failed. */
-export function isRuntimeAvailable(runtime: ProjectRuntime): boolean {
-  return spawnSync(runtime, ['--version'], { stdio: 'ignore' }).status === 0
+/**
+ * Whether a package manager's binary is on PATH, so an absent one is skipped rather than failed.
+ *
+ * The binary probed is the MANAGER itself — npm, pnpm or bun — not the runtime it implies. A machine
+ * without pnpm should report SKIP for the pnpm combinations rather than a broken factory.
+ *
+ * Read the skips when interpreting a green run: a suite where every pnpm combination skipped has not
+ * verified pnpm, it has declined to. `npm run verify` on a machine missing a manager is a weaker receipt
+ * than it looks.
+ */
+export function isPackageManagerAvailable(packageManager: PackageManager): boolean {
+  return spawnSync(packageManager, ['--version'], { stdio: 'ignore' }).status === 0
 }
 
 /**
