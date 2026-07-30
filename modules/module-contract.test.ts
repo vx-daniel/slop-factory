@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   mergePackageJsonFragments,
+  mergeTemplateData,
   type PackageJsonFragment,
   renderPackageJson,
   typescriptRunnerPrefix,
@@ -133,6 +134,51 @@ describe('renderPackageJson', () => {
     const rendered = renderPackageJson({ projectName: 'my-service', merged: {} })
 
     expect(rendered.endsWith('}\n')).toBe(true)
+  })
+})
+
+describe('mergeTemplateData', () => {
+  it('combines disjoint keys from different modules', () => {
+    const merged = mergeTemplateData([
+      { moduleName: 'node', data: { runCommand: 'npm run' } },
+      { moduleName: 'vitest', data: { usesVitest: true } },
+    ])
+
+    expect(merged).toEqual({ runCommand: 'npm run', usesVitest: true })
+  })
+
+  it('throws when two modules disagree about the same flag', () => {
+    // Silently picking one would make the rendered document depend on registry order, and the wrong
+    // document would look deliberate.
+    const merge = (): Record<string, unknown> =>
+      mergeTemplateData([
+        { moduleName: 'vitest', data: { usesVitest: true } },
+        { moduleName: 'bun-test', data: { usesVitest: false } },
+      ])
+
+    expect(merge).toThrow(/conflict/)
+    expect(merge).toThrow(/vitest/)
+    expect(merge).toThrow(/bun-test/)
+    expect(merge).toThrow(/usesVitest/)
+  })
+
+  it('allows two modules to contribute an identical value', () => {
+    const merged = mergeTemplateData([
+      { moduleName: 'node', data: { isBunRuntime: false } },
+      { moduleName: 'other', data: { isBunRuntime: false } },
+    ])
+
+    expect(merged).toEqual({ isBunRuntime: false })
+  })
+
+  it('treats an explicit false as a real value, not an absent key', () => {
+    // `bun-test` contributes `usesVitest: false` deliberately. If the merge dropped falsy values the
+    // templates would still read correctly (missing is falsy in Handlebars) but a genuine disagreement
+    // with the vitest module would stop being detectable.
+    const merged = mergeTemplateData([{ moduleName: 'bun-test', data: { usesVitest: false } }])
+
+    expect('usesVitest' in merged).toBe(true)
+    expect(merged.usesVitest).toBe(false)
   })
 })
 

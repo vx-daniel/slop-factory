@@ -31,6 +31,10 @@ export const vitestModule: ProjectModule = {
     return answers.testRunner === 'vitest'
   },
 
+  templateData(): Readonly<Record<string, unknown>> {
+    return { usesVitest: true }
+  },
+
   packageJsonFragment(answers: ProjectAnswers): PackageJsonFragment {
     const runnerPrefix = typescriptRunnerPrefix(answers.projectRuntime)
 

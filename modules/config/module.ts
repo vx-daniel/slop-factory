@@ -32,6 +32,10 @@ export const configModule: ProjectModule = {
     return answers.enableFeatures.includes(CONFIG_FEATURE_VALUE)
   },
 
+  templateData(): Readonly<Record<string, unknown>> {
+    return { hasConfigModule: true }
+  },
+
   packageJsonFragment(): PackageJsonFragment {
     return {
       dependencies: {

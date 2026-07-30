@@ -136,6 +136,76 @@ export interface ProjectModule {
 
   /** This module's package.json contribution. Called only when `isSelected` returned true. */
   packageJsonFragment(answers: ProjectAnswers): PackageJsonFragment
+
+  /**
+   * Files this module renders through Handlebars, as opposed to copying verbatim from `source/`.
+   *
+   * Declared here rather than listed in the generator, so the generator knows nothing about any
+   * module's files. The five base templates were previously five near-identical `add` blocks inside
+   * `plopfile.ts` — which both duplicated the shape and meant only `base` could contribute a rendered
+   * file at all.
+   */
+  renderedTemplates?(answers: ProjectAnswers): readonly RenderedTemplate[]
+
+  /**
+   * This module's contribution to the data every rendered template sees.
+   *
+   * Merged across all selected modules, so a flag lives with the module that knows about it: the
+   * `vitest` module contributes `usesVitest`, the runtime modules contribute the package-manager
+   * commands, `config` contributes `hasConfigModule`. Previously all of these were assembled centrally,
+   * which is how the generator ended up branching on the runtime it has no business knowing about.
+   *
+   * An UNSELECTED module contributes nothing, and a missing key is falsy in Handlebars — which is
+   * exactly the wanted semantics. `{{#if usesVitest}}` is false when the vitest module is absent,
+   * without anyone having to remember to pass `false`.
+   */
+  templateData?(answers: ProjectAnswers): Readonly<Record<string, unknown>>
+}
+
+/** One Handlebars template and where its output lands in the generated project. */
+export interface RenderedTemplate {
+  /** Path to the `.hbs` file, relative to the factory root (where the plopfile lives). */
+  readonly templateFile: string
+  /**
+   * Destination path relative to the generated project root.
+   *
+   * MAY contain Handlebars expressions — plop renders the output path as well as the contents
+   * (`node-plop/src/actions/_common-action-utils.js`, `makeDestPath`). Verified: a path of
+   * `packages/{{firstPackageName}}/package.json` creates the directory under the rendered name. That is
+   * what lets a module emit into a directory whose name is an answer, which a verbatim copy cannot do.
+   */
+  readonly outputPath: string
+}
+
+/**
+ * Merges the selected modules' template-data contributions into the single object every template sees.
+ *
+ * Conflicts THROW, for the same reason `mergePackageJsonFragments` does: two modules disagreeing about
+ * a flag means the rendered output depends on registry order, and the resulting wrong document would
+ * look deliberate. An identical value contributed twice is fine.
+ */
+export function mergeTemplateData(
+  contributions: ReadonlyArray<{ moduleName: string; data: Readonly<Record<string, unknown>> }>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  const contributingModule: Record<string, string> = {}
+
+  for (const { moduleName, data } of contributions) {
+    for (const [key, value] of Object.entries(data)) {
+      const existingValue = merged[key]
+      if (key in merged && existingValue !== value) {
+        throw new Error(
+          `template data conflict: "${key}" is set to ${JSON.stringify(existingValue)} by module ` +
+            `"${contributingModule[key]}" and to ${JSON.stringify(value)} by module "${moduleName}". ` +
+            'Two modules cannot disagree about the same template flag — give it a single owner.',
+        )
+      }
+      merged[key] = value
+      contributingModule[key] = moduleName
+    }
+  }
+
+  return merged
 }
 
 /**

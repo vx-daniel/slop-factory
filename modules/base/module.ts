@@ -1,4 +1,4 @@
-import type { PackageJsonFragment, ProjectModule } from '../module-contract.js'
+import type { PackageJsonFragment, ProjectModule, RenderedTemplate } from '../module-contract.js'
 
 const NODE_TYPES_VERSION = '^24.10.1'
 
@@ -29,6 +29,27 @@ export const baseModule: ProjectModule = {
 
   isSelected(): boolean {
     return true
+  },
+
+  /**
+   * The documents whose content depends on the answers, so they cannot come from the verbatim `source/`
+   * tree. They live at the module root, physically outside `source/`, so a file cannot be rendered by
+   * accident — see the `{{ }}` collision with GitHub Actions documented in `module-contract.ts`.
+   *
+   * `docs/README.md` is the odd one out: it is the only file whose content depends on WHICH modules were
+   * selected rather than on any single answer, which is why the generator supplies `documentedModules`
+   * rather than a module doing it.
+   */
+  renderedTemplates(): readonly RenderedTemplate[] {
+    return [
+      { templateFile: 'modules/base/gitignore.hbs', outputPath: '.gitignore' },
+      // Rendered because two fields depend on the test runner: `types` needs `bun` under `bun test`, and
+      // `include` must not name a vitest.config.ts that is not there.
+      { templateFile: 'modules/base/tsconfig.json.hbs', outputPath: 'tsconfig.json' },
+      { templateFile: 'modules/base/CLAUDE.md.hbs', outputPath: 'CLAUDE.md' },
+      { templateFile: 'modules/base/README.md.hbs', outputPath: 'README.md' },
+      { templateFile: 'modules/base/docs-index.md.hbs', outputPath: 'docs/README.md' },
+    ]
   },
 
   packageJsonFragment(): PackageJsonFragment {

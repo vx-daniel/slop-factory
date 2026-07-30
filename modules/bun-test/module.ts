@@ -38,6 +38,15 @@ export const bunTestModule: ProjectModule = {
     return answers.testRunner === 'bun-test'
   },
 
+  /**
+   * Contributed EXPLICITLY as false rather than omitted. The templates branch on `usesVitest` in both
+   * directions, and stating it keeps the two runner modules symmetrical — reading either one tells you
+   * what the templates will do, without having to know that a missing key means false.
+   */
+  templateData(): Readonly<Record<string, unknown>> {
+    return { usesVitest: false }
+  },
+
   packageJsonFragment(): PackageJsonFragment {
     return {
       devDependencies: {
