@@ -16,10 +16,12 @@ npx slop-factory generate
 ```
 
 That is the whole thing — no clone, no install. Prompts, in order: project name (also the directory
-name), destination directory (**defaults to `.`**, must already exist), package manager (**npm**, **pnpm**
-or **bun** — which also decides the runtime), **test runner (asked only for bun)**, and optional features. Nothing is written until every question is
-answered, and it refuses to generate into a non-empty directory — so accepting every default puts the
-project in a new subdirectory of wherever you ran it.
+name), destination directory (**defaults to `.`**, must already exist), layout (**single** or
+**monorepo**), **first package name (asked only for a monorepo**, defaults to `core`), package manager
+(**npm**, **pnpm** or **bun** — which also decides the runtime), **test runner (asked only for bun)**, and
+optional features. Nothing is written until every question is answered, and it refuses to generate into a
+non-empty directory — so accepting every default puts the project in a new subdirectory of wherever you
+ran it.
 
 ```bash
 npx slop-factory --help
@@ -28,9 +30,11 @@ npx slop-factory --version
 
 ### What the output looks like
 
-[`examples/`](examples/) holds three real generated projects, one per package manager —
-[`examples/npm`](examples/npm), [`examples/pnpm`](examples/pnpm) and [`examples/bun`](examples/bun) — so
-you can read the output without running anything. They are
+[`examples/`](examples/) holds four real generated projects — one per package manager
+([`npm`](examples/npm), [`pnpm`](examples/pnpm), [`bun`](examples/bun)) plus
+[`monorepo`](examples/monorepo) for the workspace layout, which is the only axis that changes the shape of
+the tree rather than the contents of a few files. Diff `monorepo/` against `npm/` and every difference is
+the layout. They are
 **generated artifacts**: edit the module that produces a file, then `npm run examples:refresh`.
 `examples:check` fails CI if they drift, because a stale example is a confident wrong answer. See
 [examples/README.md](examples/README.md) — including why you must not `npm install` inside one.
@@ -92,25 +96,49 @@ producing that answer disables the module silently, and only reading the prompt 
 
 ## The channels
 
-A module contributes to a generated project through two channels of its own, plus a small set of
-answer-dependent files the generator renders. The copy/render split is load-bearing, not stylistic.
+A module contributes through five channels — three that place files, two that merge data. The copy/render
+split is load-bearing, not stylistic.
 
 | Channel | What it is | Rendered? |
 |---|---|---|
-| `modules/<name>/source/` | Files copied byte-for-byte into the project | **Never** |
+| `modules/<name>/source/` | Files copied byte-for-byte to the **project** root | **Never** |
+| `modules/<name>/packageSource/` | Files copied byte-for-byte to the **package** root | **Never** |
+| `renderedTemplates()` | The `.hbs` files whose content depends on the answers | Yes |
 | `packageJsonFragment()` | Scripts, dependencies, engines merged into package.json | n/a |
-| `modules/base/*.hbs` | The few files whose content depends on the answers | Yes |
+| `templateData()` | Flags and vocabulary every rendered template sees | n/a |
 
-**Why `source/` is never rendered.** Handlebars and GitHub Actions both claim `{{ }}`.
-`modules/node/source/.github/workflows/ci.yml` contains `${{ github.ref }}`; run that through
-Handlebars and `{{ github.ref }}` resolves against the answers object, finds nothing, and emits an
-empty string — leaving a bare `$` and a silently broken workflow. It installs fine, it typechecks
-fine, and it fails only in CI. So the copy channel does no template evaluation whatsoever.
+**Two copy trees, because a module's files do not all belong at the same level.** The config module is
+the case that forced it: `config.defaults.toml` belongs at the repository root under any layout (its
+loader walks *up* to find it), while `src/config/**` is the package's own source. Under the single-package
+layout the two roots are the same directory, so the split is a provable no-op there — which is how it was
+introduced without changing a byte of existing output.
 
-Anything that genuinely needs interpolation lives **outside** any `source/` tree as a `.hbs` file next
-to a module descriptor — `CLAUDE.md.hbs`, `README.md.hbs`, `gitignore.hbs`, `tsconfig.json.hbs`,
-`docs-index.md.hbs` — so a file cannot be rendered by accident. Each was moved out of `source/` only
-after confirming it contains no `{{ }}` of its own.
+**Which module owns a rendered file stays with the module that understands it.** The workspace layout
+varies `tsconfig.json`, `vitest.config.ts` and `bunfig.toml`, but does not reach into them: each branches
+on the `isMonorepo` flag the `monorepo` module publishes through `templateData()`. That is why no
+post-copy transform channel was needed — and a transform channel could have corrupted any file in the
+tree, where this cannot.
+
+**Why the copy trees are never rendered.** Handlebars and GitHub Actions both claim `{{ }}`.
+`modules/base/source/.github/workflows/claude-pr-review.yml` is full of `${{ }}` expressions; run that
+through Handlebars and each one resolves against the answers object, finds nothing, and emits an empty
+string — leaving a bare `$` and a silently broken workflow. It installs fine, it typechecks fine, and it
+fails only in CI. So the copy channels do no template evaluation whatsoever.
+
+Anything that genuinely needs interpolation lives **outside** any copy tree as a `.hbs` file next to a
+module descriptor, so a file cannot be rendered by accident. Each was moved out only after confirming it
+contains no `{{ }}` of its own.
+
+Two of those templates are worth singling out:
+
+- **`ci.yml.hbs`** is the one rendered file that legitimately *contains* `${{ }}`, escaped as
+  `$\{{ github.ref }}`. It earns the exception because the alternative was one near-identical 50-line
+  copy per package manager. A generation test asserts the expression survives intact.
+- **`vitest.config.ts.hbs`** is the only `.ts` file rendered, which cuts against the rule above. The
+  narrower distinction is who edits it after generation: `src/config/*.ts` is code the adopter extends,
+  where a future `{{` is a matter of when, not if; `vitest.config.ts` is generator-owned configuration.
+  Its content also varies in a way no data flag can express — under a workspace, `test.include` must be
+  *absent* rather than different.
 
 **`ci.yml` is the one exception, and it earns it.** It contains `${{ }}`, so it was originally one
 verbatim copy per manager — but a third manager would have meant a third near-identical 50-line file, so
@@ -140,8 +168,8 @@ paths are unique, and that the declared file actually exists.
 
 ## The modules
 
-Nine modules on three axes: two always-on, one of three package managers (plus the runtime it implies),
-one of two test runners, plus opt-in features.
+Ten modules on four axes: two always-on, one of three package managers (plus the runtime it implies), one
+of two test runners, one of two layouts, plus opt-in features.
 
 | Module | Selected when | Owns |
 |---|---|---|
@@ -153,6 +181,7 @@ one of two test runners, plus opt-in features.
 | `bun` | manager = bun | Bun engine floor, and the Bun manager vocabulary — for Bun the two are one choice |
 | `vitest` | runner = vitest | `vitest.config.ts`, the 4-metric floor, the `COVERAGE.md` pipeline, `coverage-main.yml` |
 | `bun-test` | runner = bun-test | `bunfig.toml`, the `vitest` type shim, the floor-guard test |
+| `monorepo` | layout = monorepo | The per-package `package.json`, and the `isMonorepo` vocabulary other modules' templates branch on |
 | `config` | `config` feature | Layered TOML config, Zod schema, `src/config/`, `.env.example` |
 
 `npm`/`pnpm`/`bun` are mutually exclusive, and so are `vitest`/`bun-test` — enforced by their
@@ -270,7 +299,7 @@ and one place to change it. The summaries below are pointers, not the record.
 
 | # | Limitation | Effect |
 |---|---|---|
-| [#1](https://github.com/vx-daniel/slop-factory/issues/1) | The `monorepo` module is unbuilt | `modules/monorepo/` is an empty, unregistered directory; single-package is the only layout offered |
+| [#1](https://github.com/vx-daniel/slop-factory/issues/1) | A workspace starts with exactly one package | The prompt asks for one package name; adding a second is three manual steps, documented in the generated `docs/monorepo.md`. Generating several would mean guessing what they are. |
 | [#2](https://github.com/vx-daniel/slop-factory/issues/2) | `generate` has no non-interactive mode | Requires a TTY; cannot run in CI or from a script |
 | [#3](https://github.com/vx-daniel/slop-factory/issues/3) | `bun + vitest` gets no `coverage-main.yml` | `COVERAGE.md` must be refreshed locally with `coverage:readme` |
 | [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | No `repository` field — npm needs it for provenance; blocks the first `npm publish` |
@@ -278,14 +307,7 @@ and one place to change it. The summaries below are pointers, not the record.
 | [#7](https://github.com/vx-daniel/slop-factory/issues/7) | Deprecated `actions/checkout@v4` / `setup-node@v4` pins | Generated projects emit a Node 20 deprecation annotation on their first CI run |
 | [#10](https://github.com/vx-daniel/slop-factory/issues/10) | yarn is not offered | npm, pnpm and bun are. The generated gate's `detectPackageManager()` recognises yarn, so a project can be migrated by hand, but the generator neither produces nor verifies that combination. |
 
-Two of these are worth understanding before choosing options at the prompt:
-
-**The `monorepo` option is not offered at all** ([#1](https://github.com/vx-daniel/slop-factory/issues/1)).
-It needs a third channel — post-copy file transforms — because the conversion *rewrites* files other
-modules own rather than adding files of its own, and it needs three mutually-foreclosing decisions made
-first (cross-package import style, tsconfig project references vs. one config, and which of three
-non-composing Vitest discovery mechanisms). Generating a subtly broken workspace is worse than offering
-nothing, so the prompt stays silent. Reference material: `.local/docs/monorepo.md` (gitignored, local).
+One of these is worth understanding before choosing options at the prompt:
 
 **Choosing `bun test` weakens the coverage floor more than the metric count suggests**
 ([#5](https://github.com/vx-daniel/slop-factory/issues/5)). Measured on Bun 1.3.14: an untested

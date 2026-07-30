@@ -17,7 +17,7 @@
  * keeps that from happening silently, so it belongs in CI rather than in a contributor's memory.
  *
  * WHAT IT DELIBERATELY DOES NOT DO: install dependencies or run the generated gate.
- * `tests/generation.test.ts` already installs and gates all eight combinations in temp directories, which
+ * `tests/generation.test.ts` installs and gates ten of the sixteen combinations in temp directories, which
  * is both safer and more complete. Installing inside `examples/` would also fire the generated `prepare`
  * script, which runs `git config core.hooksPath .githooks` against THE FACTORY'S OWN repository — git
  * writes repo-level config regardless of the subdirectory you are standing in. See examples/README.md.
@@ -25,6 +25,11 @@
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type {
+  PackageManager,
+  ProjectStructure,
+  TestRunner,
+} from '../modules/module-contract.js'
 import { generateProject } from '../tests/generate-project.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -44,16 +49,21 @@ interface ExampleProject {
    * drift. Determinism beats a prettier `name` field in a `private: true` package nobody publishes.
    */
   readonly directoryName: string
-  readonly packageManager: 'npm' | 'pnpm' | 'bun'
-  readonly testRunner: 'vitest' | 'bun-test'
+  readonly packageManager: PackageManager
+  readonly testRunner: TestRunner
+  /** Omitted means `single`, matching the generator's own default. */
+  readonly projectStructure?: ProjectStructure
   readonly enableFeatures: readonly string[]
   /** Why this combination is the one committed — surfaced in examples/README.md. */
   readonly rationale: string
 }
 
 /**
- * The committed combinations. Three of the eight, chosen for information density rather than coverage —
- * `tests/generation.test.ts` is what covers all eight.
+ * The committed combinations. Four of the sixteen, chosen for information density rather than coverage —
+ * `tests/generation.test.ts` is what enumerates every reachable combination and gates ten of them.
+ *
+ * Three vary by package manager and runner; the fourth varies by LAYOUT, which is the only axis that
+ * changes the shape of the tree rather than the contents of a few files.
  */
 const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
   {
@@ -82,6 +92,18 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     rationale:
       "Bun with its own test runner. Chosen over bun + Vitest because that combination differs from the " +
       'npm example in only a handful of files, while this one is a genuinely different tree.',
+  },
+  {
+    directoryName: 'monorepo',
+    packageManager: 'npm',
+    testRunner: 'vitest',
+    projectStructure: 'monorepo',
+    enableFeatures: ['config'],
+    rationale:
+      'The workspace layout, which is the only example that differs STRUCTURALLY rather than in a few ' +
+      'files — source moves under packages/<name>/ while config stays at the root. Paired with npm + ' +
+      'Vitest because that is the layout at its plainest: the manager and runner deltas are already ' +
+      'readable in the other three examples, so this one isolates the layout.',
   },
 ]
 
@@ -196,12 +218,16 @@ async function refreshExamples(): Promise<number> {
       workspaceDirectory: EXAMPLES_DIRECTORY,
       packageManager: example.packageManager,
       testRunner: example.testRunner,
+      projectStructure: example.projectStructure,
       enableFeatures: example.enableFeatures,
     })
     const fileCount = (await listFilesRecursively(targetDirectory)).length
     process.stdout.write(
+      // Names the LAYOUT as well as the manager and runner. Without it the monorepo example logged as
+      // `npm + vitest` — identical to the npm example, and hiding the one axis it exists to show.
       `  regenerated examples/${example.directoryName} ` +
-        `(${example.packageManager} + ${example.testRunner}, ${fileCount} files)\n`,
+        `(${example.projectStructure ?? 'single'} + ${example.packageManager} + ` +
+        `${example.testRunner}, ${fileCount} files)\n`,
     )
   }
   process.stdout.write('\nexamples:refresh done. Review the diff before committing.\n')
@@ -230,6 +256,7 @@ async function checkExamples(): Promise<number> {
         workspaceDirectory,
         packageManager: example.packageManager,
         testRunner: example.testRunner,
+        projectStructure: example.projectStructure,
         enableFeatures: example.enableFeatures,
       })
 
