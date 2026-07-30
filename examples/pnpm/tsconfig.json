@@ -57,6 +57,11 @@
   // Root-level config files are listed explicitly. Without them, `tsc --noEmit` silently skips the
   // very files that configure the gate — a type error in vitest.config.ts would surface as a runtime
   // failure instead of a typecheck failure. Add any future root config here too.
+  //
+  // Under the workspace layout the globs cover EVERY package rather than one directory, so a new
+  // package is typechecked without editing this list. `packages/*/test` is not optional: under
+  // `bun test` the `vitest` module shim lives there, and omitting it fails every test file with
+  // "Cannot find module 'vitest'".
   "include": ["src", "test", "scripts", "vitest.config.ts"],
   "exclude": ["node_modules", "coverage"]
 }

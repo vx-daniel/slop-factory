@@ -8,6 +8,24 @@
 # so deleting it fails the suite rather than quietly lowering the bar.
 
 [test]
+{{#if isMonorepo}}
+# Scope discovery to the workspace directory. This is Bun's equivalent of Vitest's `--dir packages`,
+# and it lives in config rather than on the command line because this module already owns this file —
+# so there is no flag on a script that can drift away from it.
+#
+# Measured on Bun 1.3.14. Note the CLI forms are NOT interchangeable, which is why this is here:
+# `bun test packages` is a path SUBSTRING match and also picks up `scripts/packages-helper.test.ts`;
+# only `bun test ./packages` (or `packages/`) is a real directory scope. Setting `root` avoids having
+# to remember which form is which.
+#
+# Consequence worth knowing: every test file must live UNDER this directory. That is why this module
+# ships `test/` through its `packageSource/` tree rather than `source/` — the coverage-floor guard and
+# the `vitest` type shim land inside the package, where discovery can see them. At the repository root
+# they would be silently skipped, and the guard that exists to stop the floor being deleted would
+# itself stop running.
+root = "packages"
+
+{{/if}}
 # Always collect coverage, so `bun test` and `bun test --coverage` enforce the same floor. Without
 # this, a bare `bun test` reports success on code the floor would have rejected — and `bun test` is
 # what the gate runs.

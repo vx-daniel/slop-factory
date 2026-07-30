@@ -46,15 +46,24 @@ export const vitestModule: ProjectModule = {
    * is a worse failure than not shipping it.
    */
   renderedTemplates(answers: ProjectAnswers): readonly RenderedTemplate[] {
-    if (isBunRuntime(answers.packageManager)) {
-      return []
-    }
-    return [
+    const templates: RenderedTemplate[] = [
+      // Rendered rather than copied because its content varies by LAYOUT in a way no data flag can
+      // express: under a workspace, `test.include` must be absent rather than different. See the header
+      // comment in the template for why this is the one `.ts` file the factory renders.
       {
-        templateFile: 'modules/vitest/coverage-main.yml.hbs',
-        outputPath: '.github/workflows/coverage-main.yml',
+        templateFile: 'modules/vitest/vitest.config.ts.hbs',
+        outputPath: 'vitest.config.ts',
       },
     ]
+
+    if (!isBunRuntime(answers.packageManager)) {
+      templates.push({
+        templateFile: 'modules/vitest/coverage-main.yml.hbs',
+        outputPath: '.github/workflows/coverage-main.yml',
+      })
+    }
+
+    return templates
   },
 
   /**
@@ -73,11 +82,24 @@ export const vitestModule: ProjectModule = {
 
   packageJsonFragment(answers: ProjectAnswers): PackageJsonFragment {
     const runnerPrefix = typescriptRunnerPrefix(answers.packageManager)
+    /**
+     * Test discovery under the workspace layout, scoping the scan to `packages/`.
+     *
+     * MUST appear on BOTH `test` and `coverage`, and the config must carry no `test.include` — the two
+     * do not compose, because `test.include` resolves relative to `--dir`. Putting it on only one script
+     * is the quieter failure: the gate would pass while `coverage` measured a different set of files.
+     *
+     * Chosen over a `packages/`-prefixed `test.include` because it also keeps Vitest from walking
+     * `scripts/` and the root `node_modules` at startup.
+     */
+    const testDiscoveryScope = answers.projectStructure === 'monorepo' ? ' --dir packages' : ''
 
     return {
       scripts: {
-        test: 'vitest run',
-        coverage: `vitest run --coverage && ${runnerPrefix} scripts/coverage-to-markdown.ts`,
+        test: `vitest run${testDiscoveryScope}`,
+        coverage:
+          `vitest run --coverage${testDiscoveryScope} && ` +
+          `${runnerPrefix} scripts/coverage-to-markdown.ts`,
         'coverage:readme': `${runnerPrefix} scripts/coverage-to-markdown.ts --readme`,
         // Three openers chained because there is no cross-platform one: xdg-open on Linux, open on
         // macOS, start on Windows. Each fails fast when absent, so the chain lands on the right one.

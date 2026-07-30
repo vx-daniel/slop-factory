@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import nodePlop from 'node-plop'
-import { PACKAGE_MANAGERS, TEST_RUNNERS } from '../modules/module-contract.js'
+import {
+  DEFAULT_FIRST_PACKAGE_NAME,
+  PACKAGE_MANAGERS,
+  PROJECT_STRUCTURES,
+  TEST_RUNNERS,
+} from '../modules/module-contract.js'
 import { resolvePlopfilePath } from '../plopfile-path.js'
 
 /**
@@ -20,6 +25,8 @@ import { resolvePlopfilePath } from '../plopfile-path.js'
 const REQUIRED_PROMPT_NAMES = [
   'projectName',
   'projectPath',
+  'projectStructure',
+  'firstPackageName',
   'packageManager',
   'testRunner',
   'enableFeatures',
@@ -82,24 +89,35 @@ describe('generator prompts', () => {
     )
   })
 
-  it('does not yet offer the project-structure question', async () => {
-    // Asserts an ABSENCE on purpose, and it is meant to fail the day the monorepo layout is finished.
-    //
-    // The plumbing that resolves the package root and writes the `workspaces` field is in place, but the
-    // per-module template changes are not: a generated monorepo's tsconfig `paths` and test-discovery
-    // globs still assume `single`. Offering the choice now would produce a project that installs and
-    // typechecks and is quietly wrong, which #1 says is worse than not offering it.
-    //
-    // So this is the tripwire. Adding the prompt without the template changes fails here; adding both
-    // together means deleting this test and asserting the choices against `PROJECT_STRUCTURES` instead,
-    // the way the manager and runner prompts already are.
-    const promptNames = (await loadGeneratorPrompts()).map((prompt) => prompt.name)
+  it('offers exactly the project structures the contract declares', async () => {
+    // Replaces an absence-assertion that guarded this prompt while the monorepo templates were being
+    // built: exposing the choice before the layout worked would have generated projects that install and
+    // typecheck and are quietly wrong. The templates have landed, so the guard becomes a real check.
+    const prompts = await loadGeneratorPrompts()
+    const structurePrompt = prompts.find((prompt) => prompt.name === 'projectStructure')
 
-    expect(
-      promptNames,
-      'a projectStructure prompt exists — if the monorepo template changes have landed, replace this ' +
-        'test with one asserting its choices match PROJECT_STRUCTURES',
-    ).not.toContain('projectStructure')
+    expect(structurePrompt, 'the projectStructure prompt is missing').toBeDefined()
+    const offeredValues = (structurePrompt?.choices ?? []).map((choice) => choice.value)
+
+    expect(offeredValues.slice().sort()).toEqual([...PROJECT_STRUCTURES].sort())
+  })
+
+  it('asks for the first package name only for a workspace', async () => {
+    // Under `single` there is no packages directory for the answer to name, so the question has exactly
+    // one meaningless answer.
+    const prompts = await loadGeneratorPrompts()
+    const packageNamePrompt = prompts.find((prompt) => prompt.name === 'firstPackageName') as
+      | (PromptDescriptor & {
+          when?: (answers: Record<string, unknown>) => boolean
+          default?: unknown
+        })
+      | undefined
+
+    expect(packageNamePrompt, 'the firstPackageName prompt is missing').toBeDefined()
+    expect(typeof packageNamePrompt?.when).toBe('function')
+    expect(packageNamePrompt?.when?.({ projectStructure: 'monorepo' })).toBe(true)
+    expect(packageNamePrompt?.when?.({ projectStructure: 'single' })).toBe(false)
+    expect(packageNamePrompt?.default).toBe(DEFAULT_FIRST_PACKAGE_NAME)
   })
 
   it('asks the test-runner question only for the bun manager', async () => {

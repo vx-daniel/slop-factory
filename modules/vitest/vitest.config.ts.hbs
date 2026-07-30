@@ -1,3 +1,21 @@
+{{! ─────────────────────────────────────────────────────────────────────────────────────────────────
+    THIS IS A HANDLEBARS TEMPLATE, and it is the ONLY `.ts` file the factory renders.
+
+    That needs justifying, because `MODULE_COPY_TREES` in module-contract.ts records the opposite rule:
+    real TypeScript is copied verbatim, never rendered, since any future `{{` in it — a template
+    literal, a generic in an unlucky position — would be silently eaten. That rule is why
+    `src/config/*.ts` got a `packageSource/` tree instead of becoming a template.
+
+    The narrower distinction that makes this file the exception is WHO EDITS IT AFTER GENERATION.
+    `src/config/*.ts` is code the adopter extends; a `{{` appearing there later is a matter of when,
+    not if. `vitest.config.ts` is generator-owned project configuration — an adopter changes a
+    threshold or a glob, not the syntax. Verified zero `{{` before converting, the same check the
+    config files got.
+
+    Its content genuinely varies by layout in a way no data flag could express: under the workspace
+    layout `test.include` must be ABSENT, not different, because discovery comes from `--dir packages`
+    on the command line and the two forms do not compose (see the comment on `include` below).
+    ───────────────────────────────────────────────────────────────────────────────────────────────── }}
 import { defineConfig } from 'vitest/config'
 
 // The coverage floor the gate enforces. All four metrics share one number deliberately: a split
@@ -13,9 +31,30 @@ export default defineConfig({
   // but it is redundant here and Vitest logs a notice telling you to remove it.
   resolve: { tsconfigPaths: true },
   test: {
+{{#if isMonorepo}}
+    // NO `include` HERE, DELIBERATELY, AND DO NOT ADD ONE. Test discovery comes from `--dir packages`
+    // in the `test` and `coverage` scripts, and the two mechanisms do not compose: `test.include` is
+    // resolved RELATIVE TO `--dir`, so a `packages/`-prefixed include stacks up into
+    // `packages/packages/*/src/**/*.test.ts` and matches nothing.
+    //
+    // Measured on the generated workspace:
+    //
+    //   | Config                              | Result                                        |
+    //   |-------------------------------------|-----------------------------------------------|
+    //   | `--dir packages`, no `test.include` | tests found, coverage correct                 |
+    //   | `test.include` prefixed, no `--dir` | tests found, coverage correct                 |
+    //   | both                                | `No test files found`, exit 1, coverage 0%    |
+    //
+    // It does fail loudly rather than passing silently — but the message names only the unmatched
+    // glob, not the doubling, so it reads like a broken path and sends you to the wrong place.
+    //
+    // `coverage.include` below is unaffected and KEEPS its `packages/` prefix: it is resolved from the
+    // project root, not from `--dir`.
+{{else}}
     // Colocated (`src/**/*.test.ts`) and separate (`test/**`) layouts both work. Pick one per
     // project and delete the other glob rather than leaving both conventions live.
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+{{/if}}
 
     // A freshly generated project has no source code and therefore no tests, and Vitest's default
     // is to treat "no test files found" as exit code 1 — which would make the gate RED on day one,
@@ -53,7 +92,12 @@ export default defineConfig({
       // defeated. (Vitest ≤2 needed `all: true` for this; the option was removed in Vitest 3+ and is
       // a type error here — setting `include` is now sufficient. Verified by adding an untested
       // src/ file and watching the floor fail.)
-      include: ['src/**/*.ts'],
+      //
+      // Under the workspace layout this spans EVERY package, so coverage aggregates repo-wide and the
+      // single floor below keeps meaning one thing. A well-covered package can still mask a weak one in
+      // an aggregate number — if that becomes a problem, reach for `perFile` thresholds rather than
+      // lowering the floor.
+      include: [{{#if isMonorepo}}'packages/*/src/**/*.ts'{{else}}'src/**/*.ts'{{/if}}],
 
       // What is deliberately NOT measured. Every entry needs a reason — an exclude is the easiest
       // way to fake a coverage number, so the bar is "this file cannot meaningfully be unit-tested",
@@ -74,7 +118,16 @@ export default defineConfig({
       // outcomes: lowering the floor, or writing fig-leaf tests that assert a mock was called. This
       // gives the boundary somewhere legitimate to live. Verify shells by running the real thing —
       // see .claude/skills/test-quality/ on why "it was mocked" is not evidence.
+{{#if isMonorepo}}
+      exclude: [
+        'packages/*/src/**/*.test.ts',
+        'packages/*/src/**/types.ts',
+        'packages/*/src/**/*.d.ts',
+        'packages/*/src/**/*.io.ts',
+      ],
+{{else}}
       exclude: ['src/**/*.test.ts', 'src/**/types.ts', 'src/**/*.d.ts', 'src/**/*.io.ts'],
+{{/if}}
 
       thresholds: {
         lines: COVERAGE_FLOOR_PERCENT,

@@ -53,6 +53,11 @@ export default defineConfig({
       // defeated. (Vitest ≤2 needed `all: true` for this; the option was removed in Vitest 3+ and is
       // a type error here — setting `include` is now sufficient. Verified by adding an untested
       // src/ file and watching the floor fail.)
+      //
+      // Under the workspace layout this spans EVERY package, so coverage aggregates repo-wide and the
+      // single floor below keeps meaning one thing. A well-covered package can still mask a weak one in
+      // an aggregate number — if that becomes a problem, reach for `perFile` thresholds rather than
+      // lowering the floor.
       include: ['src/**/*.ts'],
 
       // What is deliberately NOT measured. Every entry needs a reason — an exclude is the easiest
