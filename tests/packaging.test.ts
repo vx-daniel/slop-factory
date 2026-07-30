@@ -67,18 +67,25 @@ const FORBIDDEN_PATH_PREFIXES = [
 let packedPaths: string[]
 
 beforeAll(() => {
+  // Setup failures THROW rather than assert. A broken precondition is not a failed claim about the
+  // system under test — it means the test never ran. Throwing aborts the suite once with the command's
+  // output, where an assertion here would report as a mysterious failure attributed to a hook.
   const build = spawnSync('npm', ['run', 'build'], {
     cwd: FACTORY_ROOT,
     encoding: 'utf8',
   })
-  expect(build.status, `build failed:\n${build.stdout}${build.stderr}`).toBe(0)
+  if (build.status !== 0) {
+    throw new Error(`build failed:\n${build.stdout}${build.stderr}`)
+  }
 
   // `--dry-run` computes the file list without writing a tarball, so the test leaves nothing behind.
   const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: FACTORY_ROOT,
     encoding: 'utf8',
   })
-  expect(pack.status, `npm pack failed:\n${pack.stderr}`).toBe(0)
+  if (pack.status !== 0) {
+    throw new Error(`npm pack failed:\n${pack.stderr}`)
+  }
 
   const packResult = JSON.parse(pack.stdout) as Array<{ files: Array<{ path: string }> }>
   packedPaths = packResult[0].files.map((file) => file.path)

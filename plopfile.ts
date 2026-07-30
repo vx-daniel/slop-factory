@@ -255,7 +255,7 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         type: 'list',
         name: 'testRunner',
         message: 'Which test runner? (Bun ships its own; Vitest keeps full coverage)',
-        when: (answers) => answers.projectRuntime === 'bun',
+        when: (answers): boolean => answers.projectRuntime === 'bun',
         choices: [
           {
             name: 'Vitest — recommended: 4 coverage metrics, COVERAGE.md, passWithNoTests',
