@@ -85,6 +85,27 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
   },
 ]
 
+/**
+ * Committed example directories that no longer correspond to an entry in `EXAMPLE_PROJECTS`.
+ *
+ * WHY THIS IS SEPARATE FROM THE DRIFT CHECK. `checkExamples` iterates the LIST, reporting MISSING or
+ * DRIFT for each entry it expects — so a committed directory that was dropped from the list is invisible
+ * to it and passes green. `findDrift`'s comment claims "NOTHING is excluded from the comparison", and
+ * this was the hole in that claim.
+ *
+ * Found the hard way: renaming the `node` example to `npm` left `examples/node` on disk, still committed,
+ * describing a `projectRuntime` answer the generator no longer accepts, and `examples:check` said ok.
+ */
+async function findOrphanedExampleDirectories(): Promise<string[]> {
+  const expectedDirectoryNames = new Set(EXAMPLE_PROJECTS.map((example) => example.directoryName))
+  const entries = await readdir(EXAMPLES_DIRECTORY, { withFileTypes: true })
+
+  return entries
+    .filter((entry) => entry.isDirectory() && !expectedDirectoryNames.has(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+}
+
 /** Every file under a directory, as paths relative to it. Sorted, so comparisons are deterministic. */
 async function listFilesRecursively(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true, recursive: true })
@@ -235,6 +256,16 @@ async function checkExamples(): Promise<number> {
       for (const filePath of drift.modeChanged) {
         process.stderr.write(`    executable bit differs: ${filePath}\n`)
       }
+    }
+
+    // Checked AFTER the per-example loop, because it is a question about the directory as a whole rather
+    // than about any one example: which committed trees does no entry in EXAMPLE_PROJECTS claim?
+    for (const directoryName of await findOrphanedExampleDirectories()) {
+      process.stderr.write(
+        `  ORPHAN examples/${directoryName} — no entry in EXAMPLE_PROJECTS produces this tree. ` +
+          'Delete it, or add the combination that generates it.\n',
+      )
+      driftFound = true
     }
   } finally {
     await rm(workspaceDirectory, { recursive: true, force: true })

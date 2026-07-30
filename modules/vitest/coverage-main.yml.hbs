@@ -5,8 +5,10 @@
 # node module, but the install steps are now interpolated from the selected manager, so the only real
 # dependency left is the test runner.
 #
-# It still only ships for Node managers, gated on `hasCoverageWorkflow` — see issue #3. That is now a
-# limitation rather than a necessity: nothing here would break under bun + Vitest.
+# It still only ships for the Node managers. That gate lives in the vitest module's `renderedTemplates()`
+# rather than in a template flag, because whether this FILE EXISTS is not something the template itself
+# can decide. It is a limitation rather than a necessity — nothing here would break under bun + Vitest,
+# it simply has not been verified there. See issue #3.
 #
 # COVERAGE.md is a committed snapshot of coverage at the tip of main. The per-PR gate
 # (scripts/gate.ts / `{{runCommand}} check:all`) enforces the coverage floor but does NOT freshness-check

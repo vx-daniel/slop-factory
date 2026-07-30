@@ -1,0 +1,41 @@
+node_modules
+
+# Lockfiles. EXACTLY ONE is committed — pnpm-lock.yaml, for the pnpm toolchain this
+# project was generated for. Every other manager's is ignored.
+#
+# Two committed lockfiles for one package.json is the failure this prevents: they resolve independently
+# and drift, and nobody notices until a version differs between a teammate's install and CI. If you
+# switch managers, invert this — commit the new one and ignore pnpm-lock.yaml. Do not simply add.
+package-lock.json
+bun.lock
+bun.lockb
+yarn.lock
+
+# Build output. The project is typecheck-only on generation (tsconfig sets noEmit), so nothing lands
+# here yet — the entry is pre-declared for whatever emit strategy you pick.
+dist/
+
+# Deliberately NOT ignored: `*.js` / `*.d.ts` repo-wide. Those two lines are inherited by many
+# TypeScript templates from projects that compiled in place, where they hid build output sitting next
+# to each source file. Here they would silently swallow legitimate committed JavaScript —
+# `.claude/skills/**/*.mjs` is already committed, and any .js config file (eslint, tailwind, postcss)
+# would vanish without a warning. Ignore build output by directory instead.
+
+# Coverage output (COVERAGE.md at the repo root is committed; the raw report is not)
+coverage
+
+.local/
+
+# Secrets. `.env.example` is committed as the discoverable list of what needs setting; the real
+# `.env` never is.
+.env
+
+# Config layers: the committed defaults are the exception, every other config.*.toml is a local
+# override. The negation must come AFTER the broad pattern — git applies the last matching rule, so
+# reordering these two lines silently stops committing config.defaults.toml.
+config.*.toml
+!config.defaults.toml
+
+# CodeGraph — a per-developer local code-index tool (SQLite db + daemon state).
+# Personal tooling, not adopted repo-wide; keep the whole dir out of the repo.
+.codegraph/

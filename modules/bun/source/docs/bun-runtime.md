@@ -6,6 +6,10 @@ not exist here.
 
 `bun.lock` is the committed lockfile; every other manager's is gitignored.
 
+Unlike the Node path — where npm and pnpm are two managers over one runtime, and each has its own
+document — Bun is **both** the package manager and the runtime, so there is no separate manager doc to
+read. Everything about installing and everything about executing is here.
+
 ## What works natively
 
 Measured on **Bun 1.3.14 / Node 24.12.0** against this toolchain, not inferred:

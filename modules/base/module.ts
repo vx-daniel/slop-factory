@@ -11,8 +11,12 @@ const NODE_TYPES_VERSION = '^24.10.1'
  *
  * It deliberately owns NO tooling. Biome belongs to the gate module, the test runner and its coverage
  * pipeline to `vitest` or `bun-test`, and `.ts` execution to `node` or `bun` — so each of those can be
- * swapped without base leaving a dangling script behind. `ci.yml` likewise belongs to the runtime
- * modules, because installing dependencies is package-manager-specific.
+ * swapped without base leaving a dangling script behind.
+ *
+ * `ci.yml` IS owned here, which is a change from when there was one verbatim copy per runtime module.
+ * Every generated project gets the same workflow; the parts that vary by package manager (the setup
+ * steps and the install command) are interpolated from template data the manager modules contribute.
+ * Three near-identical 50-line copies was the alternative.
  *
  * `@types/node` is the one exception, and it is not really tooling: `tsconfig.json` sets
  * `"types": ["node"]`, so omitting the package fails `tsc --noEmit` with "Cannot find type definition
@@ -49,6 +53,10 @@ export const baseModule: ProjectModule = {
       { templateFile: 'modules/base/CLAUDE.md.hbs', outputPath: 'CLAUDE.md' },
       { templateFile: 'modules/base/README.md.hbs', outputPath: 'README.md' },
       { templateFile: 'modules/base/docs-index.md.hbs', outputPath: 'docs/README.md' },
+      // Rendered rather than copied, unlike every other workflow in `source/.github/workflows/`. That
+      // makes it the one file where the Handlebars / GitHub Actions `{{ }}` collision is live, which is
+      // why the template escapes `$\{{ github.ref }}` and a test asserts the expression survives intact.
+      { templateFile: 'modules/base/ci.yml.hbs', outputPath: '.github/workflows/ci.yml' },
     ]
   },
 

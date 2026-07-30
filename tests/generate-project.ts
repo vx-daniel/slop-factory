@@ -82,10 +82,17 @@ export function runCommand(options: {
  */
 export const shouldKeepGeneratedTrees = process.env.KEEP_GENERATED_TREES !== undefined
 
-/** Whether a runtime's binary is on PATH, so an absent Bun is skipped rather than failed. */
-export function isRuntimeAvailable(packageManager: PackageManager): boolean {
-  // The binary to probe is the manager itself: npm, pnpm or bun. A machine without pnpm should report
-  // SKIP for the pnpm combinations rather than a broken factory.
+/**
+ * Whether a package manager's binary is on PATH, so an absent one is skipped rather than failed.
+ *
+ * The binary probed is the MANAGER itself — npm, pnpm or bun — not the runtime it implies. A machine
+ * without pnpm should report SKIP for the pnpm combinations rather than a broken factory.
+ *
+ * Read the skips when interpreting a green run: a suite where every pnpm combination skipped has not
+ * verified pnpm, it has declined to. `npm run verify` on a machine missing a manager is a weaker receipt
+ * than it looks.
+ */
+export function isPackageManagerAvailable(packageManager: PackageManager): boolean {
   return spawnSync(packageManager, ['--version'], { stdio: 'ignore' }).status === 0
 }
 

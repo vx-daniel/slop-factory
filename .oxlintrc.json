@@ -94,6 +94,21 @@
     // losing the await check with it.
     "vitest/valid-expect": ["error", { "maxArgs": 2 }],
 
+    // Enabled by the `correctness` category above; listed here only to declare this repo's assertion
+    // HELPERS. The rule flags a test whose body contains no `expect`, which is the right default and
+    // catches a real mistake. But `tests/generation.test.ts` runs the same assertion pair against eight
+    // package-manager combinations, so the pair lives in a named helper — and the rule then reads the
+    // calling test as assertion-free.
+    //
+    // This is a declaration, NOT a relaxation: naming the helper is how the rule is told where the
+    // assertions moved to. The alternative was inlining the pair back into each caller, which is the
+    // duplication the helper exists to remove. A helper added later must be named here too, otherwise
+    // its callers fail this rule — which is the intended failure, not a bug.
+    "vitest/expect-expect": [
+      "error",
+      { "assertFunctionNames": ["expect", "expectTypeOf", "assert", "assertType", "expectOnlyThisManagersInstall"] }
+    ],
+
     // ── Biome nursery ───────────────────────────────────────────────────────────────────────────
     "typescript/explicit-function-return-type": "warn", // ← useExplicitType (warn in Biome too)
     "vitest/no-conditional-expect": "error", // ← noConditionalExpect

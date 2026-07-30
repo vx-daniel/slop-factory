@@ -33,7 +33,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node --import tsx scripts/copy-dist-assets.ts",
+    "build": "node --import tsx scripts/clean-dist.ts && tsc -p tsconfig.build.json && node --import tsx scripts/copy-dist-assets.ts",
     "check:all": "npm run lint && npm run typecheck && npm run test",
     "examples:check": "npm run build && node --import tsx scripts/examples.ts check",
     "examples:refresh": "npm run build && node --import tsx scripts/examples.ts refresh",

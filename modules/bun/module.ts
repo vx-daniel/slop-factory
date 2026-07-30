@@ -46,9 +46,9 @@ export const bunModule: ProjectModule = {
   },
 
   /**
-   * Deliberately does NOT contribute `hasCoverageWorkflow`. A missing key is falsy in Handlebars, which
-   * is the correct answer: `coverage-main.yml` is npm-specific and ships from the node module, so a Bun
-   * project refreshes COVERAGE.md locally instead.
+   * Deliberately says nothing about `coverage-main.yml`. That workflow and the `hasCoverageWorkflow`
+   * flag are both owned by the `vitest` module, which declines to emit either under Bun — so a Bun
+   * project refreshes COVERAGE.md locally instead. See issue #3.
    */
   templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {
     return {

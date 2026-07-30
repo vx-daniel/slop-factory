@@ -46,12 +46,6 @@ export const nodeModule: ProjectModule = {
       isBunRuntime: false,
       /** Reuses the shared helper rather than restating the string — one source of truth. */
       typescriptRunner: typescriptRunnerPrefix(answers.packageManager),
-      /**
-       * Whether `coverage-main.yml` ships. Node-only for now, which is a limitation rather than a
-       * principle: the workflow commits a refreshed COVERAGE.md back to main, and it is now
-       * manager-agnostic, so bun + Vitest could have it too. Tracked as issue #3.
-       */
-      hasCoverageWorkflow: true,
     }
   },
 
