@@ -6,6 +6,7 @@ import {
   DEFAULT_FIRST_PACKAGE_NAME,
   isBunRuntime,
   PACKAGE_MANAGERS,
+  PROJECT_STRUCTURES,
   TEST_RUNNERS,
   type ProjectAnswers,
 } from '../modules/module-contract.js'
@@ -90,20 +91,25 @@ const FORBIDDEN_PATH_PREFIXES = [
  * skipped there — so those combinations are unreachable and asserting against them would describe a
  * generator that does not exist.
  */
-const REACHABLE_ANSWERS: readonly ProjectAnswers[] = PACKAGE_MANAGERS.flatMap((packageManager) =>
-  TEST_RUNNERS.filter(
-    (testRunner) => testRunner === 'vitest' || isBunRuntime(packageManager),
-  ).map((testRunner) => ({
-    projectName: 'irrelevant',
-    projectPath: '/tmp',
-    packageManager,
-    testRunner,
-    // `single` only: this suite asks which templates a module DECLARES, and no module varies that by
-    // layout. A monorepo entry would add combinations without adding a distinct declared template.
-    projectStructure: 'single' as const,
-    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
-    enableFeatures: ['config'],
-  })),
+const REACHABLE_ANSWERS: readonly ProjectAnswers[] = PROJECT_STRUCTURES.flatMap(
+  (projectStructure) =>
+    PACKAGE_MANAGERS.flatMap((packageManager) =>
+      TEST_RUNNERS.filter(
+        (testRunner) => testRunner === 'vitest' || isBunRuntime(packageManager),
+      ).map((testRunner) => ({
+        projectName: 'irrelevant',
+        projectPath: '/tmp',
+        packageManager,
+        testRunner,
+        // BOTH layouts, because the `monorepo` module declares a template no other layout does — the
+        // per-package package.json. Iterating only `single` left that template out of the derived list
+        // entirely, so nothing checked whether it reaches the published tarball. That is the same
+        // publish-surface gap that shipped two deleted workflows and an unwired template before it.
+        projectStructure,
+        firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+        enableFeatures: ['config'],
+      })),
+    ),
 )
 
 /**

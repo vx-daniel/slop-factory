@@ -108,6 +108,27 @@ function assertKnownTestRunner(rawTestRunner: unknown): TestRunner {
 }
 
 /**
+ * Rejects a first-package name at the PROMPT, so a typo costs one keystroke.
+ *
+ * Duplicates the checks in `normalizeFirstPackageName` on purpose — that one is the backstop for callers
+ * that bypass prompts entirely (the example and drift scripts), and throwing there mid-generation is a
+ * worse experience than declining the answer here. The rules are stated once, in the message.
+ */
+function validateFirstPackageName(rawName: string): true | string {
+  const packageName = rawName.trim()
+  if (packageName.length === 0) {
+    return 'Package name cannot be empty.'
+  }
+  if (packageName.includes('/') || packageName.includes('\\')) {
+    return 'Package name must be a single directory name, not a path.'
+  }
+  if (packageName.startsWith('.')) {
+    return 'Package name cannot start with a dot.'
+  }
+  return true
+}
+
+/**
  * Rejects a project-structure answer that is unknown.
  *
  * Throws rather than falling back to `single`, even though `single` is the only reachable value today.
@@ -171,10 +192,9 @@ function toProjectAnswers(rawAnswers: Record<string, unknown>): ProjectAnswers {
     // is skipped for them and the answer would be `undefined`. Normalizing here means no module has to
     // defend against that combination.
     testRunner: packageManager === 'bun' ? assertKnownTestRunner(rawAnswers.testRunner) : 'vitest',
-    // FORCED to `single`, not read from the answers, because no prompt offers the choice yet — the
-    // per-module template changes that make a generated workspace build are not in place. A caller that
-    // supplies `monorepo` directly (the tests do) gets it honoured; an operator cannot reach it.
-    // Remove the `?? DEFAULT_PROJECT_STRUCTURE` and add the prompt in the same change, never separately.
+    // The default applies only when nothing supplied a value — the drift-check and example scripts call
+    // `runActions` directly and legitimately omit it. A prompt answer is always present, so this is not
+    // a fallback that can mask a renamed prompt; `assertKnownProjectStructure` throws on anything else.
     projectStructure: assertKnownProjectStructure(
       rawAnswers.projectStructure ?? DEFAULT_PROJECT_STRUCTURE,
     ),
@@ -305,6 +325,26 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         message: 'Directory to create it in',
         default: '.',
         validate: validateDestinationDirectory,
+      },
+      {
+        type: 'list',
+        name: 'projectStructure',
+        message: 'Which layout?',
+        choices: [
+          { name: 'single   — one package, source at src/', value: 'single' },
+          { name: 'monorepo — a workspace, source at packages/<name>/src/', value: 'monorepo' },
+        ],
+      },
+      // Asked only for a workspace, because `single` has no packages directory for the answer to name.
+      // A workspace starts with exactly ONE package: generating several would mean guessing what they
+      // are, and adding the second is three steps documented in docs/monorepo.md.
+      {
+        type: 'input',
+        name: 'firstPackageName',
+        message: 'Name of the first package (created under packages/)',
+        default: DEFAULT_FIRST_PACKAGE_NAME,
+        when: (answers): boolean => answers.projectStructure === 'monorepo',
+        validate: validateFirstPackageName,
       },
       // ONE question, not two. The manager determines the runtime — see PACKAGE_MANAGERS in
       // module-contract.ts for why modelling them separately was rejected.

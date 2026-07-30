@@ -166,6 +166,140 @@ describe('monorepo layout', () => {
   })
 })
 
+describe('monorepo layout — the files other modules own', () => {
+  let projectDirectory: string
+
+  beforeAll(async () => {
+    projectDirectory = await generateProject({
+      projectName: 'monorepo-templates',
+      workspaceDirectory,
+      packageManager: 'npm',
+      testRunner: 'vitest',
+      projectStructure: 'monorepo',
+      enableFeatures: [...CONFIG_FEATURE],
+    })
+  })
+
+  it('points the tsconfig alias at the package and covers every package', async () => {
+    const tsconfig = await readFile(path.join(projectDirectory, 'tsconfig.json'), 'utf8')
+
+    expect(tsconfig, 'the alias must name the package, not `@/*`').toContain(
+      `"@${DEFAULT_FIRST_PACKAGE_NAME}/*": ["./${WORKSPACE_PACKAGES_DIRECTORY}/${DEFAULT_FIRST_PACKAGE_NAME}/src/*"]`,
+    )
+    // `packages/*/test` is not optional: the `bun test` type shim lives there, and omitting it fails
+    // every test file with "Cannot find module 'vitest'".
+    expect(tsconfig).toContain(`"${WORKSPACE_PACKAGES_DIRECTORY}/*/src"`)
+    expect(tsconfig).toContain(`"${WORKSPACE_PACKAGES_DIRECTORY}/*/test"`)
+    expect(tsconfig, 'the single-package alias must not survive').not.toContain('"@/*"')
+  })
+
+  it('omits test.include from the vitest config, because --dir supplies discovery', async () => {
+    // THE assertion for this layout. `test.include` resolves relative to `--dir`, so the two stack into
+    // `packages/packages/**` and match nothing — reporting only the unmatched glob, which reads like a
+    // broken path rather than a doubling. Matching the `include:` KEY at test level, not in a comment.
+    const vitestConfig = await readFile(path.join(projectDirectory, 'vitest.config.ts'), 'utf8')
+    const includeKeyLines = vitestConfig
+      .split('\n')
+      .filter((line) => /^\s{4}include:/.test(line))
+
+    expect(includeKeyLines, 'test.include must be absent when --dir packages is used').toEqual([])
+    // Coverage include is a DIFFERENT key, resolved from the project root, and must keep its prefix.
+    expect(vitestConfig).toContain(`'${WORKSPACE_PACKAGES_DIRECTORY}/*/src/**/*.ts'`)
+  })
+
+  it('scopes both test and coverage scripts to the workspace directory', async () => {
+    // Both, not one. Scoping only `test` would leave the gate passing while `coverage` measured a
+    // different set of files — the quieter of the two failures.
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectDirectory, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> }
+
+    expect(packageJson.scripts.test).toContain(`--dir ${WORKSPACE_PACKAGES_DIRECTORY}`)
+    expect(packageJson.scripts.coverage).toContain(`--dir ${WORKSPACE_PACKAGES_DIRECTORY}`)
+  })
+
+  it('gives the first package its own package.json', async () => {
+    // A directory under packages/ without one is not a workspace member: the manager ignores it, and the
+    // single-lockfile-at-the-root arrangement silently does not apply to it.
+    const packageJson = JSON.parse(
+      await readFile(
+        path.join(
+          projectDirectory,
+          WORKSPACE_PACKAGES_DIRECTORY,
+          DEFAULT_FIRST_PACKAGE_NAME,
+          'package.json',
+        ),
+        'utf8',
+      ),
+    ) as { name: string; private: boolean }
+
+    expect(packageJson.name).toBe(`@monorepo-templates/${DEFAULT_FIRST_PACKAGE_NAME}`)
+    expect(packageJson.private).toBe(true)
+  })
+
+  it('ships the monorepo document and links it from the index', async () => {
+    await expect(
+      access(path.join(projectDirectory, 'docs', 'monorepo.md')),
+    ).resolves.toBeUndefined()
+
+    const documentIndex = await readFile(path.join(projectDirectory, 'docs', 'README.md'), 'utf8')
+    expect(documentIndex).toContain('(monorepo.md)')
+  })
+})
+
+describe('single layout — no workspace vocabulary leaks in', () => {
+  let projectDirectory: string
+
+  beforeAll(async () => {
+    projectDirectory = await generateProject({
+      projectName: 'single-templates',
+      workspaceDirectory,
+      packageManager: 'bun',
+      testRunner: 'bun-test',
+      enableFeatures: [...CONFIG_FEATURE],
+    })
+  })
+
+  it('keeps the @/* alias and the src/test includes', async () => {
+    const tsconfig = await readFile(path.join(projectDirectory, 'tsconfig.json'), 'utf8')
+
+    expect(tsconfig).toContain('"@/*": ["./src/*"]')
+    expect(tsconfig).toContain('"include": ["src", "test", "scripts"')
+
+    // Asserts the QUOTED forms, not the bare word `packages`. This file's own comments explain what the
+    // workspace layout does differently, so they legitimately contain that word — a bare
+    // `not.toContain('packages')` matched the prose and failed against a correct config. Third instance
+    // of that trap in this repo (see the ci.yml install-command test, and the copy-tree config guard in
+    // modules/module-sources.test.ts): text-matching a config whose comments discuss the thing being
+    // checked needs the quotes to tell configuration from explanation.
+    expect(tsconfig, 'a workspace include glob leaked into a single-package project').not.toContain(
+      `"${WORKSPACE_PACKAGES_DIRECTORY}/*/src"`,
+    )
+    expect(tsconfig, 'a per-package alias leaked into a single-package project').not.toContain(
+      `"@${DEFAULT_FIRST_PACKAGE_NAME}/*"`,
+    )
+  })
+
+  it('sets no discovery root in bunfig, so the whole project is scanned', async () => {
+    // `root` scopes discovery to a directory. A single-package project has no `packages/`, so setting it
+    // would find zero test files — and `bun test` treats that as a hard exit 1 with no flag to soften it.
+    const bunfig = await readFile(path.join(projectDirectory, 'bunfig.toml'), 'utf8')
+    const rootLines = bunfig.split('\n').filter((line) => /^\s*root\s*=/.test(line))
+
+    expect(rootLines, 'bunfig must not scope discovery in a single-package project').toEqual([])
+  })
+
+  it('puts the coverage floor guard where a bare bun test will find it', async () => {
+    await expect(
+      access(path.join(projectDirectory, 'test', 'coverage-floor.test.ts')),
+    ).resolves.toBeUndefined()
+  })
+
+  it('creates no per-package package.json', async () => {
+    expect(await exists(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY))).toBe(false)
+  })
+})
+
 describe('monorepo layout with a named package', () => {
   it('honours a first package name other than the default', async () => {
     const namedPackage = 'billing'

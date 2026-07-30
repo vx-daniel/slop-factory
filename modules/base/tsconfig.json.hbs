@@ -15,6 +15,33 @@
     // every test file with "Cannot find module 'vitest'" while the tests themselves run fine.
     "types": [{{#if usesVitest}}"node"{{else}}"node", "bun"{{/if}}],
 
+{{#if isMonorepo}}
+    // Path aliases, one per package. `@{{firstPackageName}}/*` maps into that package's `src`, so a
+    // cross-package import reads `@{{firstPackageName}}/orders/store.js` rather than a relative path
+    // climbing out of one package and into another.
+    //
+    // ADDING A PACKAGE MEANS ADDING AN ENTRY HERE. That is the cost of this approach, chosen over
+    // importing packages by their package.json name (`@scope/{{firstPackageName}}/...`). The trade:
+    // package-name imports need no `paths` upkeep, but they only resolve once the workspace has been
+    // installed and linked, and they require each package to declare an `exports` map to expose
+    // subpaths. Aliases resolve straight from this file, before any install.
+    //
+    // THIS IS THE ONE SOURCE OF TRUTH for aliases — three consumers read it rather than restating it:
+    //   • tsc, from here directly.
+    //   • Vitest, via `resolve.tsconfigPaths` in vitest.config.ts.
+    //   • Runtime, via {{#if isBunRuntime}}Bun, which reads tsconfig `paths` natively{{else}}`tsx` (Node's own resolver does NOT read
+    //     tsconfig and throws ERR_MODULE_NOT_FOUND on an alias){{/if}}.
+    //
+    // There is exactly ONE tsconfig for the whole workspace, and no per-package config extending it.
+    // That is deliberate: `paths` entries resolve relative to the file that DECLARES them, so a
+    // per-package config extending a base is the classic way to get subtly wrong mappings. With one
+    // file there is nothing to get wrong — every entry below is relative to this directory.
+    //
+    // No `baseUrl`: it is deprecated and stops functioning in TypeScript 7 (which this repo pins).
+    "paths": {
+      "@{{firstPackageName}}/*": ["./packages/{{firstPackageName}}/src/*"]
+    },
+{{else}}
     // Path aliases. `@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` instead of
     // `../../../orders/store.js` and does not break when the importing file moves.
     //
@@ -31,6 +58,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+{{/if}}
 
     // `strict` turns the whole family on. The flags below are listed for discoverability, not to
     // carve out exceptions — nothing here may weaken `strict`.
@@ -57,6 +85,15 @@
   // Root-level config files are listed explicitly. Without them, `tsc --noEmit` silently skips the
   // very files that configure the gate — a type error in vitest.config.ts would surface as a runtime
   // failure instead of a typecheck failure. Add any future root config here too.
+  //
+  // Under the workspace layout the globs cover EVERY package rather than one directory, so a new
+  // package is typechecked without editing this list. `packages/*/test` is not optional: under
+  // `bun test` the `vitest` module shim lives there, and omitting it fails every test file with
+  // "Cannot find module 'vitest'".
+{{#if isMonorepo}}
+  "include": ["packages/*/src", "packages/*/test", "scripts"{{#if usesVitest}}, "vitest.config.ts"{{/if}}],
+{{else}}
   "include": ["src", "test", "scripts"{{#if usesVitest}}, "vitest.config.ts"{{/if}}],
+{{/if}}
   "exclude": ["node_modules", "coverage"]
 }

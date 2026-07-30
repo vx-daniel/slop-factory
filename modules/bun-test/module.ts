@@ -1,4 +1,9 @@
-import type { PackageJsonFragment, ProjectAnswers, ProjectModule } from '../module-contract.js'
+import type {
+  PackageJsonFragment,
+  ProjectAnswers,
+  ProjectModule,
+  RenderedTemplate,
+} from '../module-contract.js'
 
 const BUN_TYPES_VERSION = '^1.3.14'
 
@@ -43,6 +48,15 @@ export const bunTestModule: ProjectModule = {
    * directions, and stating it keeps the two runner modules symmetrical — reading either one tells you
    * what the templates will do, without having to know that a missing key means false.
    */
+  /**
+   * `bunfig.toml` is rendered because the workspace layout needs a `[test] root` entry, and TOML — like
+   * JSON — cannot contain a valid `{{`, so templating it carries none of the risk that keeps real
+   * TypeScript in the copy channel. See `MODULE_COPY_TREES` in module-contract.ts.
+   */
+  renderedTemplates(): readonly RenderedTemplate[] {
+    return [{ templateFile: 'modules/bun-test/bunfig.toml.hbs', outputPath: 'bunfig.toml' }]
+  },
+
   templateData(): Readonly<Record<string, unknown>> {
     return { usesVitest: false }
   },

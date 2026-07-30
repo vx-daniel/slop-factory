@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -27,7 +27,43 @@ import { describe, expect, it } from 'vitest'
 /** The floor this project committed to. Raising it here and in bunfig.toml must happen together. */
 const EXPECTED_MINIMUM_THRESHOLD = 0.85
 
-const BUNFIG_PATH = resolve(dirname(import.meta.dirname), 'bunfig.toml')
+/**
+ * Finds `bunfig.toml` by walking UP from this file, rather than a fixed number of levels.
+ *
+ * The hop count is not knowable here, because this file's depth depends on the project layout: `test/`
+ * sits at the project root in a single-package project and at `packages/<name>/test/` in a workspace,
+ * while `bunfig.toml` is always at the root. A hardcoded `dirname(import.meta.dirname)` worked for the
+ * first and looked for `packages/<name>/bunfig.toml` in the second — measured, ENOENT.
+ *
+ * That failure was loud rather than silent, which is the only reason it was cheap. But a guard that
+ * throws for a reason unrelated to what it guards is one impatient refactor away from being deleted as
+ * broken, taking the coverage floor's only protection with it.
+ *
+ * Walking up is also how `src/config/config.ts` locates `config.defaults.toml`, so both agree about
+ * where the repository root is.
+ */
+function findBunfigPath(startDirectory: string): string {
+  let currentDirectory = startDirectory
+
+  for (;;) {
+    const candidatePath = resolve(currentDirectory, 'bunfig.toml')
+    if (existsSync(candidatePath)) {
+      return candidatePath
+    }
+
+    const parentDirectory = dirname(currentDirectory)
+    // `dirname` of the filesystem root returns the root itself, which is the only stop condition.
+    if (parentDirectory === currentDirectory) {
+      throw new Error(
+        `could not find bunfig.toml in any directory above ${startDirectory}. It holds the coverage ` +
+          'floor this test guards; if it was deleted, restore it rather than deleting this test.',
+      )
+    }
+    currentDirectory = parentDirectory
+  }
+}
+
+const BUNFIG_PATH = findBunfigPath(import.meta.dirname)
 
 /**
  * Reads `coverageThreshold` out of bunfig.toml.

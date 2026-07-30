@@ -1,7 +1,11 @@
 import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_FIRST_PACKAGE_NAME, type ProjectAnswers } from './module-contract.js'
+import {
+  DEFAULT_FIRST_PACKAGE_NAME,
+  PROJECT_STRUCTURES,
+  type ProjectAnswers,
+} from './module-contract.js'
 import { PROJECT_MODULES } from './registry.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -19,7 +23,7 @@ const TEST_RUNNER_MODULES = ['vitest', 'bun-test'] as const
  * `toProjectAnswers` forces `vitest` there — asserting an npm + bun-test combination would be asserting
  * behaviour for an answer set the generator cannot produce.
  */
-const REACHABLE_ANSWERS = [
+const MANAGER_AND_RUNNER_COMBINATIONS = [
   { packageManager: 'npm', testRunner: 'vitest', enableFeatures: [] },
   { packageManager: 'npm', testRunner: 'vitest', enableFeatures: ['config'] },
   { packageManager: 'pnpm', testRunner: 'vitest', enableFeatures: [] },
@@ -29,6 +33,21 @@ const REACHABLE_ANSWERS = [
   { packageManager: 'bun', testRunner: 'bun-test', enableFeatures: [] },
   { packageManager: 'bun', testRunner: 'bun-test', enableFeatures: ['config'] },
 ] as const
+
+/**
+ * Every answer set the prompts can produce, across BOTH layouts.
+ *
+ * The layout is a genuine third axis rather than a variant, so it multiplies: `monorepo` selects an extra
+ * module that contributes its own template data and its own output path, and the checks below — one
+ * manager, one runner, no duplicate output path, no template-data conflict — are exactly the ones that
+ * catch a new module colliding with an existing one.
+ *
+ * Iterating only `single` would have left the `monorepo` module's contributions unchecked while every
+ * assertion still passed, which is the failure this list exists to prevent.
+ */
+const REACHABLE_ANSWERS = PROJECT_STRUCTURES.flatMap((projectStructure) =>
+  MANAGER_AND_RUNNER_COMBINATIONS.map((combination) => ({ ...combination, projectStructure })),
+)
 
 /**
  * Fills in the answer fields these assertions deliberately do not vary.
@@ -44,7 +63,6 @@ function toFullAnswers(answers: (typeof REACHABLE_ANSWERS)[number]): ProjectAnsw
   return {
     projectName: 'example',
     projectPath: '/tmp',
-    projectStructure: 'single',
     firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
     ...answers,
   }
