@@ -1,0 +1,31 @@
+# Copy to `config.local.toml` (gitignored) to override the committed defaults on this machine.
+#
+# ONLY INCLUDE THE KEYS YOU CHANGE. The two layers are deep-merged key by key, so a section here
+# does not replace the whole section in config.defaults.toml — the untouched keys survive. Copying
+# the entire defaults file and editing two lines is the common mistake: it silently freezes every
+# other value at whatever the defaults said the day you copied it.
+#
+# STILL NO SECRETS. This layer is for machine-specific *wiring* — endpoints, ids, ports. Credentials
+# stay in .env and are referenced by variable name via `apiKeyEnv`, exactly as in the defaults. That
+# way this file is safe to paste into a chat or share with a teammate setting up the same box.
+#
+# Every example below is commented out. Uncomment what you actually need.
+
+# Override a single value; host and requestTimeoutMs keep their default values.
+# [server]
+# port = 8443
+
+# Turn up log verbosity for a debugging session.
+# [logging]
+# level = "debug"
+
+# Add a machine-specific service. Its credential is named, not written.
+# [services.staging]
+# kind      = "http"
+# baseUrl   = "https://staging.internal.example.com"
+# apiKeyEnv = "STAGING_API_KEY"        # add the value to .env
+
+# Point a feature at different services. NOTE: arrays REPLACE rather than append, so this is the
+# complete new chain — which is what lets you shorten one, not just extend it.
+# [features]
+# jobQueue = ["staging"]

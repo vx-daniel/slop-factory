@@ -1,0 +1,63 @@
+name: Test-quality audit
+
+# CALLER STUB — copy this into <your-repo>/.github/workflows/test-audit.yml
+#
+# Delegates to the shared reusable audit in Viaanix/vx-repo-tools. The choice-typed
+# inputs below constrain what the Actions "Run workflow" UI offers; they are
+# forwarded to the reusable workflow, which re-validates them (a reusable
+# workflow can't trust its caller to have used choice inputs).
+#
+# Prerequisites:
+#   - Org secret CLAUDE_CODE_OAUTH_TOKEN_TOOLING shared to this repo (org admin).
+#   - Viaanix/vx-repo-tools Actions access allows org repos to use its workflows.
+#   - THIS repo is a Vitest/TypeScript project AND vendors the test-quality skill
+#     at .claude/skills/test-quality/ (copy it from Viaanix/vx-repo-tools).
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Which tests to audit"
+        required: false
+        default: "all *.test.ts under src/"
+      test_command:
+        description: "Test runner command (e.g. npx vitest run, npm test, bun test, jest)"
+        required: false
+        default: npx vitest run
+      model:
+        description: "Model — Sonnet 5 (cheaper/faster) or Opus 4.8 (deeper judgment)"
+        type: choice
+        required: false
+        default: claude-sonnet-5
+        options:
+          - claude-sonnet-5
+          - claude-opus-4-8
+      effort:
+        description: "Reasoning effort. Higher = deeper thinking per step (more cost)."
+        type: choice
+        required: false
+        default: high
+        options:
+          - low
+          - medium
+          - high
+          - xhigh
+          - max
+      max_turns:
+        description: "Cap on Claude turns. BLANK = no cap (bounded by the 30-min timeout)."
+        required: false
+        default: ""
+
+jobs:
+  audit:
+    uses: Viaanix/vx-repo-tools/.github/workflows/test-audit.yml@v1
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    with:
+      scope: ${{ inputs.scope }}
+      test_command: ${{ inputs.test_command }}
+      model: ${{ inputs.model }}
+      effort: ${{ inputs.effort }}
+      max_turns: ${{ inputs.max_turns }}
+    secrets: inherit

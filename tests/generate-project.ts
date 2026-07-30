@@ -4,7 +4,12 @@ import nodePlop from 'node-plop'
 import { resolvePlopfilePath } from '../plopfile-path.js'
 import type { ProjectRuntime, TestRunner } from '../modules/module-contract.js'
 
-const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
+/**
+ * Resolved at MODULE LOAD, not per call — so importing this helper throws if the factory has not been
+ * built. That is deliberate: `resolvePlopfilePath` only ever returns the compiled plopfile, and failing
+ * at import gives a message naming the missing build instead of a confusing failure mid-generation.
+ * Every npm script that reaches this module runs `npm run build` first.
+ */
 const PLOPFILE_PATH = resolvePlopfilePath()
 const GENERATOR_NAME = 'generate'
 

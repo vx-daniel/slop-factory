@@ -1,0 +1,34 @@
+# Bun runtime configuration.
+#
+# This file exists for ONE load-bearing reason: it is where the coverage floor lives under `bun test`.
+# Under Vitest the floor sits in `vitest.config.ts`; Bun's runner does not read that file, so removing
+# or emptying this one silently disables the floor entirely.
+#
+# `test/coverage-floor.test.ts` asserts the threshold below is present and at least the intended value,
+# so deleting it fails the suite rather than quietly lowering the bar.
+
+[test]
+# Always collect coverage, so `bun test` and `bun test --coverage` enforce the same floor. Without
+# this, a bare `bun test` reports success on code the floor would have rejected — and `bun test` is
+# what the gate runs.
+coverage = true
+
+# The floor, as a fraction rather than a percentage (Bun's units differ from Vitest's).
+#
+# IMPORTANT — this is a MATERIALLY WEAKER guarantee than the Vitest configuration it replaces, in two
+# ways. Both were measured, not assumed:
+#
+#   1. Bun reports only `% Funcs` and `% Lines`. There is no branch or statement coverage, and a
+#      lines-only number is exactly where coverage theatre hides — a suite can execute every line while
+#      never taking the `else`.
+#
+#   2. **Bun only measures files a test imports.** Vitest has `coverage.include` for precisely this
+#      reason; Bun has no equivalent option. Verified: adding an untested `src/orphan.ts` containing a
+#      branch left it ABSENT from the coverage table entirely, the total still read 100%, and the floor
+#      still passed. So an entirely untested module is invisible here rather than counted as 0%.
+#
+# Consequence: this floor tells you the covered files are well covered. It does NOT tell you that all
+# files are covered. Until Bun grows an `include` option, the compensating practice is to check the
+# coverage table's FILE LIST — not just the percentage — for anything missing. If that is not a trade
+# this project can accept, move to Vitest; see docs/testing-with-bun-test.md.
+coverageThreshold = 0.85

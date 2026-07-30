@@ -1,0 +1,116 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "plugins": ["./.biome/naming.grit"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": false,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.claude"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noUselessTernary": "error",
+        "noUselessTypeConstraint": "error",
+        "noExcessiveNestedTestSuites": "error",
+        "useSimplifiedLogicExpression": "error",
+        "noImplicitCoercions": "error",
+        "noUselessStringConcat": "error",
+        "useMaxParams": "error",
+        "noExcessiveCognitiveComplexity": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error"
+      },
+      "suspicious": {
+        "noConsole": "warn",
+        "noUnknownAtRules": "error",
+        "noTsIgnore": "error",
+        "noExplicitAny": "error",
+        "noEmptyBlockStatements": "error",
+        "useAwait": "off"
+      },
+      "style": {
+        "noNestedTernary": "error",
+        "useNodejsImportProtocol": "off",
+        "useNumericSeparators": "error",
+        "useThrowOnlyError": "error",
+        "noProcessEnv": "error",
+        "useThrowNewError": "error",
+        "noNonNullAssertion": "error",
+        "useExplicitLengthCheck": "error"
+      },
+      "nursery": {
+        "useSortedClasses": "error",
+        "noFloatingPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "useExplicitType": "warn",
+        "noConditionalExpect": "error",
+        "noUselessTypeConversion": "error"
+      },
+      "performance": {
+        "noReExportAll": "error"
+      }
+    },
+    "domains": {
+      "test": "all"
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "json": {
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/*.ts",
+        "!**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "noDuplicateClasses": "on",
+        "organizeImports": "on"
+      }
+    }
+  }
+}

@@ -45,7 +45,24 @@ const REQUIRED_DOT_PATH_ASSETS = [
 ]
 
 /** Source files that must NEVER ship: they import devDependencies or are the uncompiled originals. */
-const FORBIDDEN_PATH_PREFIXES = ['tests/', 'modules/', 'cli.ts', 'plopfile.ts']
+/**
+ * Path prefixes that must never appear in the tarball.
+ *
+ * `tests/` and `scripts/` import devDependencies; `modules/`, `cli.ts`, and `plopfile.ts` are the
+ * uncompiled originals that `dist/` supersedes. `examples/` is two full generated projects — ~114 files
+ * of pure review surface with no runtime purpose, which would roughly triple the published size.
+ *
+ * All are already excluded by the `files` allowlist. This asserts it stays that way: `files` is an
+ * allowlist, so a future entry added carelessly (`"."`, or a broad glob) would pull them all in at once.
+ */
+const FORBIDDEN_PATH_PREFIXES = [
+  'tests/',
+  'scripts/',
+  'modules/',
+  'examples/',
+  'cli.ts',
+  'plopfile.ts',
+]
 
 let packedPaths: string[]
 

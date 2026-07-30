@@ -1,0 +1,61 @@
+# Default configuration — COMMITTED, safe, NO SECRETS.
+#
+# This is layer 1 of three. See README.md § "Configuration" for the full picture:
+#
+#   config.defaults.toml   committed    safe defaults; every key the schema requires
+#   config.local.toml      gitignored   machine-specific overrides (endpoints, ids)
+#   .env                   gitignored   SECRETS ONLY, referenced BY NAME (see apiKeyEnv)
+#
+# The two TOML files are deep-merged (local wins, key by key) and validated together, so
+# config.local.toml only needs the keys it changes — not a full copy of this file.
+#
+# SECRETS NEVER APPEAR IN EITHER TOML FILE. A service names an env var via `apiKeyEnv`;
+# the value is read from process.env at the point of use. That is what lets this file be
+# committed and a local config be shared with a teammate without leaking a credential.
+#
+# Field keys are camelCase so the TOML, the Zod schema, and the TypeScript type all use
+# the same spelling with no key transformation anywhere. Names used as MAP KEYS
+# (`[services.<name>]`) are identifiers you choose — they are referenced verbatim from
+# `[features]`, so renaming one means renaming its references too.
+#
+# --- REPLACE EVERYTHING BELOW ---
+# These sections are a working demonstration of the available patterns, not a starter set
+# you are meant to keep. Delete what your project does not need and edit the schema in
+# src/config/config-schema.ts to match. The schema is strict: an unknown key is a hard
+# error at boot, so config and schema cannot silently drift apart.
+
+[app]
+name        = "my-application"
+environment = "development"          # development | staging | production
+
+[server]
+host             = "127.0.0.1"
+port             = 3000
+requestTimeoutMs = 30_000
+
+[limits]
+maxConcurrentJobs = 4
+maxRetryAttempts  = 2
+
+# OPTIONAL SECTION. Every field has a default in the schema, so omitting `[logging]`
+# entirely is valid and yields the defaults. Override any subset in config.local.toml for
+# a noisier debugging session.
+[logging]
+level = "info"                       # debug | info | warn | error
+
+# A named registry. Define as many entries as you like; `kind` selects which other fields
+# are valid (a discriminated union in the schema), so an `http` entry may not carry
+# `filePath` and an `in-memory` entry may not carry `baseUrl`.
+[services.primary]
+kind      = "http"
+baseUrl   = "http://localhost:8080"
+apiKeyEnv = "PRIMARY_API_KEY"        # the NAME of an env var, never the key itself
+
+[services.scratch]
+kind = "in-memory"                   # no credential, no endpoint — nothing else is allowed
+
+# References into the registry above. The schema checks every name here actually exists in
+# [services], so a typo fails at boot with a message naming the bad reference — rather
+# than at 3am when that code path first runs.
+[features]
+jobQueue = ["primary", "scratch"]    # a list is an ordered fallback chain: primary first
