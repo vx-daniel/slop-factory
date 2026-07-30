@@ -5,9 +5,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PROJECT_MODULES } from '../modules/registry.js'
 import {
   DEFAULT_FIRST_PACKAGE_NAME,
+  DEFAULT_TEST_RUNNER,
   isBunRuntime,
+  PACKAGE_MANAGERS,
+  packageRootRelativePath,
   type PackageManager,
   type ProjectAnswers,
+  PROJECT_STRUCTURES,
+  type ProjectStructure,
+  TEST_RUNNERS,
   type TestRunner,
 } from '../modules/module-contract.js'
 import {
@@ -58,6 +64,7 @@ interface Combination {
   readonly label: string
   readonly packageManager: PackageManager
   readonly testRunner: TestRunner
+  readonly projectStructure: ProjectStructure
   readonly enableFeatures: readonly string[]
 }
 
@@ -72,16 +79,77 @@ interface Combination {
  * code and no tests, which BOTH runners treat as a failure by default — Vitest needs `passWithNoTests`,
  * and `bun test` has no such flag, which is why the bun-test module ships a real test of its own.
  */
-const COMBINATIONS: readonly Combination[] = [
-  { label: 'npm + vitest + config', packageManager: 'npm', testRunner: 'vitest', enableFeatures: ['config'] },
-  { label: 'npm + vitest + bare', packageManager: 'npm', testRunner: 'vitest', enableFeatures: [] },
-  { label: 'pnpm + vitest + config', packageManager: 'pnpm', testRunner: 'vitest', enableFeatures: ['config'] },
-  { label: 'pnpm + vitest + bare', packageManager: 'pnpm', testRunner: 'vitest', enableFeatures: [] },
-  { label: 'bun + vitest + config', packageManager: 'bun', testRunner: 'vitest', enableFeatures: ['config'] },
-  { label: 'bun + vitest + bare', packageManager: 'bun', testRunner: 'vitest', enableFeatures: [] },
-  { label: 'bun + bun-test + config', packageManager: 'bun', testRunner: 'bun-test', enableFeatures: ['config'] },
-  { label: 'bun + bun-test + bare', packageManager: 'bun', testRunner: 'bun-test', enableFeatures: [] },
-]
+/** The two feature answers: the checkbox on, and nothing selected. */
+const FEATURE_SETS: readonly (readonly string[])[] = [['config'], []]
+
+/**
+ * Every answer set the prompts can actually produce, computed from the contract's own constants.
+ *
+ * DERIVED RATHER THAN LISTED, because a hand-written matrix drifts from the prompts in both directions
+ * and neither shows up as a failure: a combination the prompts gained is simply never gated, and one they
+ * lost is gated forever against a generator that cannot produce it. Adding a package manager or a test
+ * runner to `module-contract.ts` now extends this list without anyone remembering to.
+ *
+ * The one rule encoded here is reachability: `bun-test` pairs only with the bun manager, because `bun
+ * test` ships with the Bun runtime and the prompt is skipped for npm and pnpm — `toProjectAnswers` forces
+ * `vitest` there. Asserting an npm + bun-test row would be asserting behaviour for an answer set the
+ * generator refuses to make.
+ */
+function everyReachableCombination(): readonly Combination[] {
+  return PROJECT_STRUCTURES.flatMap((projectStructure) =>
+    PACKAGE_MANAGERS.flatMap((packageManager) =>
+      TEST_RUNNERS.filter(
+        (testRunner) => testRunner === DEFAULT_TEST_RUNNER || isBunRuntime(packageManager),
+      ).flatMap((testRunner) =>
+        FEATURE_SETS.map((enableFeatures) => ({
+          label:
+            `${projectStructure} + ${packageManager} + ${testRunner} + ` +
+            `${enableFeatures.length > 0 ? enableFeatures.join(',') : 'bare'}`,
+          packageManager,
+          testRunner,
+          projectStructure,
+          enableFeatures,
+        })),
+      ),
+    ),
+  )
+}
+
+/**
+ * Whether a reachable combination gets the full install-and-gate treatment.
+ *
+ * Every combination is reachable; not every one is worth minutes of install. The single-package layout is
+ * covered exhaustively because it is the default and the cheapest to get wrong. The workspace layout is
+ * covered by two REPRESENTATIVE pairs, because its risk concentrates in test DISCOVERY and the two
+ * runners scope that by mechanisms which cannot both be exercised by one project — Vitest via `--dir
+ * packages` on the command line, `bun test` via `root` in bunfig.toml.
+ *
+ * What that deliberately leaves out, and why each is defensible:
+ *
+ *   - **pnpm + monorepo** — its whole delta from npm is install and CI vocabulary, which the
+ *     single-package pnpm rows already gate. The layout code paths are identical.
+ *   - **bun + vitest + monorepo** — the same `--dir packages` path the npm row covers.
+ *   - **the bare monorepo rows** — with no config module a workspace has no package source at all, so
+ *     there is nothing layout-specific left to place.
+ *
+ * `tests/layout.test.ts` covers file placement for every layout without installing anything, so the
+ * combinations skipped here are not unexamined — only un-installed. The test at the bottom of this file
+ * prints them, because a suite that silently covers less than it appears to is worse than a slow one.
+ */
+function isInstalledAndGated(combination: Combination): boolean {
+  if (combination.projectStructure === 'single') {
+    return true
+  }
+  const isRepresentativePair =
+    (combination.packageManager === 'npm' && combination.testRunner === 'vitest') ||
+    combination.testRunner === 'bun-test'
+  return isRepresentativePair && combination.enableFeatures.includes('config')
+}
+
+const ALL_REACHABLE_COMBINATIONS = everyReachableCombination()
+const COMBINATIONS: readonly Combination[] = ALL_REACHABLE_COMBINATIONS.filter(isInstalledAndGated)
+const UNINSTALLED_COMBINATIONS: readonly Combination[] =
+  ALL_REACHABLE_COMBINATIONS.filter((combination) => !isInstalledAndGated(combination))
 
 let workspaceDirectory: string
 
@@ -99,11 +167,18 @@ afterAll(async () => {
 })
 
 describe.each(COMBINATIONS)('$label', (combination) => {
-  const { packageManager, testRunner, enableFeatures } = combination
+  const { packageManager, testRunner, projectStructure, enableFeatures } = combination
   const hasConfigModule = enableFeatures.includes('config')
   const usesVitest = testRunner === 'vitest'
   const usesBunRuntime = isBunRuntime(packageManager)
   const managerAvailable = isPackageManagerAvailable(packageManager)
+  /**
+   * Where this combination's package source lives, relative to the project root.
+   *
+   * Derived rather than branched on, so an assertion about a package-relative file reads the same for
+   * both layouts. `.` under `single`, so `path.join` collapses it away.
+   */
+  const packageRoot = packageRootRelativePath({ projectStructure, firstPackageName: DEFAULT_FIRST_PACKAGE_NAME })
 
   /**
    * The answer object the modules see — used to derive expectations rather than restating them.
@@ -116,7 +191,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     projectPath: '/tmp',
     packageManager,
     testRunner,
-    projectStructure: 'single',
+    projectStructure,
     firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
     enableFeatures,
   }
@@ -130,10 +205,11 @@ describe.each(COMBINATIONS)('$label', (combination) => {
       return
     }
     projectDirectory = await generateProject({
-      projectName: `verify-${packageManager}-${testRunner}-${hasConfigModule ? 'config' : 'bare'}`,
+      projectName: `verify-${projectStructure}-${packageManager}-${testRunner}-${hasConfigModule ? 'config' : 'bare'}`,
       workspaceDirectory,
       packageManager,
       testRunner,
+      projectStructure,
       enableFeatures,
     })
 
@@ -209,8 +285,10 @@ describe.each(COMBINATIONS)('$label', (combination) => {
       expect(bunfig).toMatch(/coverageThreshold\s*=\s*0\.85/)
       expect(bunfig).toMatch(/coverage\s*=\s*true/)
 
+      // Package-relative: under a workspace this is `packages/<name>/test/`, because bunfig's
+      // `root = "packages"` scopes discovery there and a root-level test file would be silently skipped.
       await expect(
-        access(path.join(projectDirectory, 'test', 'coverage-floor.test.ts')),
+        access(path.join(projectDirectory, packageRoot, 'test', 'coverage-floor.test.ts')),
       ).resolves.toBeUndefined()
     },
   )
@@ -409,6 +487,38 @@ describe.each(COMBINATIONS)('$label', (combination) => {
         /\{\{|\}\}/,
       )
     }
+  })
+})
+
+describe('the matrix itself', () => {
+  it('installs and gates every single-package combination', () => {
+    // The default layout gets no representative-sampling discount. If this ever fails it means the
+    // sampling predicate started excluding a `single` row, which would be a silent loss of the coverage
+    // that matters most.
+    const uninstalledSinglePackage = UNINSTALLED_COMBINATIONS.filter(
+      (combination) => combination.projectStructure === 'single',
+    ).map((combination) => combination.label)
+
+    expect(uninstalledSinglePackage).toEqual([])
+  })
+
+  it('reports the reachable combinations it does not install', () => {
+    // NOT a coverage assertion — a disclosure. `isInstalledAndGated` trades install time for breadth,
+    // and a suite that quietly covers less than it appears to is worse than a slow one. Printing the
+    // list puts it in the CI log next to the passing rows.
+    //
+    // Pinned to a count so that widening the sampling is a deliberate edit here rather than a drift.
+    process.stdout.write(
+      `\n  not installed (covered for placement by tests/layout.test.ts):\n${UNINSTALLED_COMBINATIONS.map(
+        (combination) => `    - ${combination.label}`,
+      ).join('\n')}\n`,
+    )
+
+    expect(
+      COMBINATIONS.length + UNINSTALLED_COMBINATIONS.length,
+      'every reachable combination must be either installed or listed as not installed',
+    ).toBe(ALL_REACHABLE_COMBINATIONS.length)
+    expect(UNINSTALLED_COMBINATIONS.length, 'the sampling widened or narrowed — was that deliberate?').toBe(6)
   })
 })
 
