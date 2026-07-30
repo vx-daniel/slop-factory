@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config'
+import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './modules/module-contract.js'
 
 /**
  * A generation test installs dependencies and runs the generated project's full gate plus coverage,
@@ -26,12 +27,17 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['modules/**/*.test.ts'],
-          // Excluded for the same reason tsconfig.json excludes it: files under a module's `source/`
+          // Excluded for the same reason tsconfig.json excludes them: files under a module's COPY TREES
           // are TEMPLATES destined for a generated project, and they run against THAT project's
-          // dependencies. `modules/config/source/src/config/config.test.ts` imports zod and smol-toml,
-          // which the factory does not install — so collecting them here fails on imports that are
-          // correct where the files actually live.
-          exclude: ['modules/*/source/**'],
+          // dependencies. `modules/config/packageSource/src/config/config.test.ts` imports zod and
+          // smol-toml, which the factory does not install — so collecting them here fails on imports
+          // that are correct where the files actually live.
+          //
+          // DERIVED from the contract rather than listed, unlike the three JSON configs that cannot
+          // import it. Adding a copy tree covers this file automatically.
+          exclude: MODULE_COPY_TREE_DIRECTORY_NAMES.map(
+            (copyTreeDirectoryName) => `modules/*/${copyTreeDirectoryName}/**`,
+          ),
         },
       },
       {

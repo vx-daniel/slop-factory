@@ -50,6 +50,18 @@ const REQUIRED_DOT_PATH_ASSETS = [
   'dist/modules/config/source/.env.example',
 ]
 
+/**
+ * Payload from the SECOND copy tree, listed separately because it is the newer channel.
+ *
+ * `packageSource/` is copied by the same build step as `source/`, but nothing about `source/` shipping
+ * correctly implies this one does — the copier iterates a list, and an omission there would publish a
+ * package whose config module generates no `src/config/` at all. Which the consumer discovers, not us.
+ */
+const REQUIRED_PACKAGE_SOURCE_ASSETS = [
+  'dist/modules/config/packageSource/src/config/config.ts',
+  'dist/modules/config/packageSource/src/config/config-schema.ts',
+]
+
 /** Source files that must NEVER ship: they import devDependencies or are the uncompiled originals. */
 /**
  * Path prefixes that must never appear in the tarball.
@@ -165,6 +177,12 @@ describe('published tarball', () => {
 
   it('includes the dot-path assets npm is most likely to drop', () => {
     for (const requiredPath of REQUIRED_DOT_PATH_ASSETS) {
+      expect(packedPaths, `${requiredPath} missing from the tarball`).toContain(requiredPath)
+    }
+  })
+
+  it('includes the packageSource tree, not just source', () => {
+    for (const requiredPath of REQUIRED_PACKAGE_SOURCE_ASSETS) {
       expect(packedPaths, `${requiredPath} missing from the tarball`).toContain(requiredPath)
     }
   })

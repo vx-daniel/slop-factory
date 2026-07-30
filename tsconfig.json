@@ -1,11 +1,15 @@
 {
   // Typechecks the FACTORY itself — the CLI, the plopfile, the module descriptors, and the tests.
   //
-  // It deliberately does NOT typecheck `modules/*/source/**`: those files are templates destined for a
-  // generated project, and they compile against THAT project's tsconfig, not this one. They use `@/*`
-  // aliases that only resolve there, they target TypeScript 7 while the factory runs 5.9, and one of
-  // them (`bun-test`'s shim) declares a module that only exists under Bun. Including them here would
-  // report errors that are not errors anywhere real.
+  // It deliberately does NOT typecheck a module's COPY TREES — `modules/*/source/**` and
+  // `modules/*/packageSource/**`: those files are templates destined for a generated project, and they
+  // compile against THAT project's tsconfig, not this one. They use `@/*` aliases that only resolve
+  // there, they target TypeScript 7 while the factory runs 5.9, and one of them (`bun-test`'s shim)
+  // declares a module that only exists under Bun. Including them here would report errors that are not
+  // errors anywhere real.
+  //
+  // Both trees must be listed. `MODULE_COPY_TREES` in `modules/module-contract.ts` is the authoritative
+  // list, but JSON cannot import it — `modules/module-sources.test.ts` fails if this file falls behind.
   //
   // Internal imports use `.js` specifiers, NOT `.ts`. `allowImportingTsExtensions` would require
   // `noEmit`, and this package has to emit — see tsconfig.build.json. tsc does not rewrite `.ts`
@@ -22,5 +26,5 @@
     "skipLibCheck": true
   },
   "include": ["cli.ts", "plopfile.ts", "plopfile-path.ts", "modules/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", "modules/*/source"]
+  "exclude": ["node_modules", "dist", "modules/*/source", "modules/*/packageSource"]
 }

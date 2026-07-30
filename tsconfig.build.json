@@ -7,12 +7,16 @@
   // slop-factory` install lands in `node_modules`, so publishing `.ts` cannot work no matter what the
   // consumer's Node version is. Verified, not assumed.
   //
-  // WHAT IS AND IS NOT COMPILED. Only the factory's own code. Everything under `modules/*/source/` is
-  // PAYLOAD — files copied byte-for-byte into generated projects, several of which are `.ts` that must
-  // stay `.ts`. `scripts/copy-dist-assets.ts` copies those (and the `.hbs` templates) into `dist/`
-  // afterwards, so `dist/` becomes a faithful mirror of the repo layout. That mirroring is what lets
-  // the plopfile keep resolving `modules/<name>/source` relative to its own directory, unchanged,
-  // whether it is running from source or from `dist/`.
+  // WHAT IS AND IS NOT COMPILED. Only the factory's own code. Everything under a module's COPY TREES —
+  // `modules/*/source/` and `modules/*/packageSource/` — is PAYLOAD: files copied byte-for-byte into
+  // generated projects, several of which are `.ts` that must stay `.ts`.
+  // `scripts/copy-dist-assets.ts` copies those (and the `.hbs` templates) into `dist/` afterwards, so
+  // `dist/` becomes a faithful mirror of the repo layout. That mirroring is what lets the plopfile keep
+  // resolving `modules/<name>/<tree>` relative to its own directory, unchanged, whether it is running
+  // from source or from `dist/`.
+  //
+  // Both trees must be listed below. `MODULE_COPY_TREES` in `modules/module-contract.ts` is the
+  // authoritative list; JSON cannot import it, so `modules/module-sources.test.ts` guards the drift.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
@@ -26,5 +30,13 @@
   },
   // Tests are not published. They import `vitest`, which is a devDependency, so shipping them would put
   // an unresolvable import inside the tarball.
-  "exclude": ["node_modules", "dist", "modules/*/source", "tests", "**/*.test.ts", "scripts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "modules/*/source",
+    "modules/*/packageSource",
+    "tests",
+    "**/*.test.ts",
+    "scripts"
+  ]
 }

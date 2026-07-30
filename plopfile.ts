@@ -5,6 +5,7 @@ import type { NodePlopAPI } from 'plop'
 import {
   mergePackageJsonFragments,
   mergeTemplateData,
+  MODULE_COPY_TREES,
   type PackageJsonFragment,
   type ProjectAnswers,
   PACKAGE_MANAGERS,
@@ -15,15 +16,12 @@ import {
 } from './modules/module-contract.js'
 import { PROJECT_MODULES } from './modules/registry.js'
 
-/** Custom action type that copies a module's `source/` tree verbatim. */
+/** Custom action type that copies one of a module's verbatim-copy trees. */
 const COPY_MODULE_SOURCE = 'copyModuleSource'
 /** Custom action type that writes the merged package.json. */
 const WRITE_PACKAGE_JSON = 'writePackageJson'
 /** Custom action type that refuses to generate into a non-empty directory. */
 const ASSERT_EMPTY_DESTINATION = 'assertEmptyDestination'
-
-/** Subdirectory of a module holding files copied verbatim into the generated project. */
-const MODULE_SOURCE_DIRECTORY = 'source'
 
 /**
  * Rejects a destination that is not an existing directory.
@@ -185,23 +183,26 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
    * package.json fragments), so a missing directory is reported, not failed.
    */
   plop.setActionType(COPY_MODULE_SOURCE, async (_answers, config) => {
-    const { moduleName, destinationDirectory } = config as unknown as {
+    const { moduleName, copyTreeDirectoryName, destinationDirectory } = config as unknown as {
       moduleName: string
+      copyTreeDirectoryName: string
       destinationDirectory: string
     }
-    const moduleSourceDirectory = path.join(
+    const moduleCopyTreeDirectory = path.join(
       factoryRoot,
       'modules',
       moduleName,
-      MODULE_SOURCE_DIRECTORY,
+      copyTreeDirectoryName,
     )
+    // A module shipping only SOME of the copy trees is the normal case, not an error — `npm` and `pnpm`
+    // have no `packageSource/` at all, and most modules have no package-relative source either.
     try {
-      await fs.access(moduleSourceDirectory)
+      await fs.access(moduleCopyTreeDirectory)
     } catch {
-      return `${moduleName}: no source/ tree, package.json fragment only`
+      return `${moduleName}: no ${copyTreeDirectoryName}/ tree, nothing to copy`
     }
-    await fs.cp(moduleSourceDirectory, destinationDirectory, { recursive: true })
-    return `${moduleName}: copied source/ tree`
+    await fs.cp(moduleCopyTreeDirectory, destinationDirectory, { recursive: true })
+    return `${moduleName}: copied ${copyTreeDirectoryName}/ tree`
   })
 
   /**
@@ -320,14 +321,33 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         ),
       }
 
+      /**
+       * Where a package's own source lands.
+       *
+       * IDENTICAL to the project root today, because the single-package layout is the only one offered —
+       * so every `packageSource/` copy is currently indistinguishable from a `source/` copy, and
+       * `examples:check` proves generated output unchanged. A workspace layout would point this at
+       * `packages/<name>/` and the split would start doing visible work. Named and resolved separately
+       * now so that later change has exactly one place to happen.
+       */
+      const copyDestinations: Readonly<Record<string, string>> = {
+        projectRoot: destinationDirectory,
+        packageRoot: destinationDirectory,
+      }
+
       return [
         { type: ASSERT_EMPTY_DESTINATION, destinationDirectory },
 
-        ...selectedModules.map((projectModule) => ({
-          type: COPY_MODULE_SOURCE,
-          moduleName: projectModule.name,
-          destinationDirectory,
-        })),
+        // Every module × every copy tree. A module missing a given tree is skipped by the action itself
+        // rather than filtered here, so the generator needs no knowledge of which modules ship what.
+        ...selectedModules.flatMap((projectModule) =>
+          MODULE_COPY_TREES.map((copyTree) => ({
+            type: COPY_MODULE_SOURCE,
+            moduleName: projectModule.name,
+            copyTreeDirectoryName: copyTree.directoryName,
+            destinationDirectory: copyDestinations[copyTree.landsIn],
+          })),
+        ),
 
         {
           type: WRITE_PACKAGE_JSON,

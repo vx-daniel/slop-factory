@@ -1,8 +1,22 @@
-import { readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './module-contract.js'
 
 const MODULES_DIRECTORY = import.meta.dirname
+const FACTORY_ROOT = path.resolve(MODULES_DIRECTORY, '..')
+
+/**
+ * Configs that must exclude every copy tree, and cannot import the list that names them.
+ *
+ * All three are JSON, so `MODULE_COPY_TREES` is unreachable from them and the globs are written by hand.
+ * That makes "added a copy tree, forgot a config" a silent failure with three different symptoms: tsc
+ * reporting errors in files that are correct where they actually live, oxlint doing the same, and the
+ * build compiling payload `.ts` that must stay `.ts`. This list is what makes the hand-maintenance safe.
+ *
+ * `vitest.config.ts` is deliberately absent — it is TypeScript and derives its globs from the contract.
+ */
+const CONFIGS_EXCLUDING_COPY_TREES = ['tsconfig.json', 'tsconfig.build.json', '.oxlintrc.json']
 
 /**
  * Filenames npm interprets as ignore rules when building a tarball.
@@ -40,23 +54,27 @@ async function listModuleNames(): Promise<string[]> {
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 }
 
-describe('module source trees', () => {
+describe('module copy trees', () => {
   it('contain no file npm would treat as an ignore rule', async () => {
     const offenders: string[] = []
 
     for (const moduleName of await listModuleNames()) {
-      const sourceDirectory = path.join(MODULES_DIRECTORY, moduleName, 'source')
-      let files: string[]
-      try {
-        files = await listFilesRecursively(sourceDirectory)
-      } catch {
-        // A module with no source/ tree is legitimate; it simply has nothing to check.
-        continue
-      }
+      // EVERY copy tree, not just `source/`. The pack-filter hazard is a property of being payload
+      // inside the published package, which both trees are.
+      for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+        const copyTreeDirectory = path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName)
+        let files: string[]
+        try {
+          files = await listFilesRecursively(copyTreeDirectory)
+        } catch {
+          // A module missing a given copy tree is legitimate; it simply has nothing to check.
+          continue
+        }
 
-      for (const filePath of files) {
-        if (NPM_IGNORE_FILENAMES.includes(path.basename(filePath))) {
-          offenders.push(`${moduleName}/source/${filePath}`)
+        for (const filePath of files) {
+          if (NPM_IGNORE_FILENAMES.includes(path.basename(filePath))) {
+            offenders.push(`${moduleName}/${copyTreeDirectoryName}/${filePath}`)
+          }
         }
       }
     }
@@ -68,23 +86,61 @@ describe('module source trees', () => {
     ).toEqual([])
   })
 
-  it('has at least one module shipping a source tree, so the check is not vacuous', async () => {
-    // A guard that passes because it found nothing to look at is not a guard. If every source/ tree
-    // disappeared, the assertion above would still pass — this makes that state fail instead.
+  it('has at least one module shipping each copy tree, so the check is not vacuous', async () => {
+    // A guard that passes because it found nothing to look at is not a guard. If a copy tree stopped
+    // existing anywhere, the assertion above would still pass — this makes that state fail instead.
+    // Asserted PER TREE rather than in aggregate: `source/` alone would otherwise satisfy it while
+    // `packageSource/` silently held nothing.
     const moduleNames = await listModuleNames()
-    const modulesWithSourceTrees: string[] = []
 
-    for (const moduleName of moduleNames) {
-      try {
-        const files = await listFilesRecursively(path.join(MODULES_DIRECTORY, moduleName, 'source'))
-        if (files.length > 0) {
-          modulesWithSourceTrees.push(moduleName)
+    for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+      const modulesShippingThisTree: string[] = []
+
+      for (const moduleName of moduleNames) {
+        try {
+          const files = await listFilesRecursively(
+            path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName),
+          )
+          if (files.length > 0) {
+            modulesShippingThisTree.push(moduleName)
+          }
+        } catch {
+          continue
         }
-      } catch {
-        continue
+      }
+
+      expect(
+        modulesShippingThisTree.length,
+        `no module ships a ${copyTreeDirectoryName}/ tree, so its checks are vacuous`,
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  it('are excluded by every config that cannot import the copy-tree list', async () => {
+    // The three JSON configs write their globs by hand because JSON cannot import
+    // `MODULE_COPY_TREES`. Without this, adding a copy tree passes every other check and then breaks
+    // tsc, oxlint, or the build with a symptom that points at the payload file rather than the config.
+    //
+    // MATCHES THE QUOTED FORM, and the quotes are the whole point. An earlier version searched for the
+    // bare glob text and did not fail when the real exclude was deleted — because these files' own
+    // COMMENTS name the trees they exclude (```modules/*/packageSource/**```), so the match succeeded on
+    // the prose. Verified by deleting the entry and watching the test still pass. A glob only counts as
+    // configuration when it appears as a JSON string, which is what the surrounding quotes assert.
+    //
+    // Deliberately stricter than "somewhere in the exclude array": writing the entry with a `/**` suffix
+    // would fail this even though tsc would accept it. That is the safe direction to be wrong in — a
+    // false positive fails loudly and is a one-line fix, where the false negative it replaces was silent.
+    for (const configFileName of CONFIGS_EXCLUDING_COPY_TREES) {
+      const configContents = await readFile(path.join(FACTORY_ROOT, configFileName), 'utf8')
+
+      for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+        expect(
+          configContents,
+          `${configFileName} has no "modules/*/${copyTreeDirectoryName}" exclude entry — payload ` +
+            'files would be typechecked, linted, or compiled as if they were factory code. A mention ' +
+            'in a comment does not count; it must be a quoted glob.',
+        ).toContain(`"modules/*/${copyTreeDirectoryName}"`)
       }
     }
-
-    expect(modulesWithSourceTrees.length).toBeGreaterThan(0)
   })
 })
