@@ -26,11 +26,15 @@
     "dist",
     "coverage",
 
-    // Templates destined for a GENERATED project, not factory code. They compile against that
-    // project's tsconfig, use `@/*` aliases that only resolve there, and target TypeScript 7 while the
-    // factory runs 5.9 — the same reason tsconfig.json and the Vitest `unit` project exclude them.
-    // Linting them here would report findings that are not findings anywhere real.
+    // A module's COPY TREES: templates destined for a GENERATED project, not factory code. They compile
+    // against that project's tsconfig, use `@/*` aliases that only resolve there, and target TypeScript 7
+    // while the factory runs 5.9 — the same reason tsconfig.json and the Vitest `unit` project exclude
+    // them. Linting them here would report findings that are not findings anywhere real.
+    //
+    // Both trees must be listed. `MODULE_COPY_TREES` in `modules/module-contract.ts` is the authoritative
+    // list; JSON cannot import it, so `modules/module-sources.test.ts` fails if this falls behind.
     "modules/*/source",
+    "modules/*/packageSource",
 
     // Generated artifacts. `examples:check` guarantees they match the generator byte-for-byte, so the
     // only way to "fix" a finding here is to change the module that produced it — which oxlint would

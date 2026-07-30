@@ -1,14 +1,15 @@
 /**
  * The contract every generator module implements.
  *
- * A module contributes through four channels. The first two are files; the last two are merged data:
+ * A module contributes through five channels. The first three are files; the last two are merged data:
  *
- *   1. `<module>/source/` — copied VERBATIM, byte for byte, never rendered.
- *   2. `renderedTemplates()` — `.hbs` files run through Handlebars, output path included.
- *   3. `packageJsonFragment()` — merged into the generated package.json.
- *   4. `templateData()` — merged into the data every rendered template sees.
+ *   1. `<module>/source/` — copied VERBATIM to the PROJECT root, byte for byte, never rendered.
+ *   2. `<module>/packageSource/` — copied VERBATIM to the PACKAGE root. See `MODULE_COPY_TREES`.
+ *   3. `renderedTemplates()` — `.hbs` files run through Handlebars, output path included.
+ *   4. `packageJsonFragment()` — merged into the generated package.json.
+ *   5. `templateData()` — merged into the data every rendered template sees.
  *
- * The verbatim/rendered split in 1 vs 2 is load-bearing rather than stylistic.
+ * The verbatim/rendered split in 1–2 vs 3 is load-bearing rather than stylistic.
  *
  * WHY THE SOURCE TREE IS NEVER RENDERED. Handlebars and GitHub Actions both claim `{{ }}`. A workflow
  * containing `${{ github.ref }}` run through
@@ -19,10 +20,62 @@
  * by the generator, never through `source/`.
  *
  * Because the copy is UNIFORM across every module, the generator performs it — a module does not
- * declare it. `source/` mirrors its own output layout exactly, so `gate/source/scripts/gate.ts`
+ * declare it. Each copy tree mirrors its own output layout exactly, so `gate/source/scripts/gate.ts`
  * lands at `scripts/gate.ts` in the generated project. That convention is the whole mapping: to know
- * where a file ends up, read its path under `source/`.
+ * where a file ends up, read its path under the tree, then read which root that tree lands in.
  */
+
+/**
+ * Which root a copy tree's contents land in.
+ *
+ * `projectRoot` is the generated project's top directory. `packageRoot` is the directory holding the
+ * package's own source — which under the single-package layout IS the project root, and under a
+ * workspace layout would be `packages/<name>/`.
+ */
+export type ModuleCopyDestination = 'projectRoot' | 'packageRoot'
+
+/** One verbatim-copy tree a module may ship, and which root its contents land in. */
+export interface ModuleCopyTree {
+  /** Directory name directly under `modules/<name>/`. */
+  readonly directoryName: string
+  readonly landsIn: ModuleCopyDestination
+}
+
+/**
+ * Every verbatim-copy tree a module may ship. THE single list — nine things derive from it.
+ *
+ * WHY TWO TREES RATHER THAN ONE. A module's files do not all belong at the same level. The config
+ * module is the clear case: `config.defaults.toml`, `.env.example` and `docs/configuration.md` belong at
+ * the REPOSITORY root under any layout, while `src/config/**` is the package's own source and belongs
+ * wherever that package's source lives. One copy tree writes to fixed paths, so it cannot express that
+ * split — which is precisely what blocked the monorepo module.
+ *
+ * WHY THIS IS A NO-OP TODAY, AND WHY THAT IS THE POINT. Only the single-package layout exists, where
+ * the package root and the project root are the same directory. So splitting a module's tree in two
+ * changes nothing about generated output — and `examples:check` proves that byte-for-byte. Establishing
+ * the channel while it is provably inert is much cheaper than establishing it inside the feature that
+ * first needs it, where a drift could be the channel or could be the feature.
+ *
+ * WHY NOT RUN THE `.ts` FILES THROUGH HANDLEBARS INSTEAD. That was the considered alternative: make
+ * `src/config/*.ts` into `.hbs` templates with a dynamic output path, which the rendered channel already
+ * supports. Rejected because it would run real TypeScript through a template engine purely to vary a
+ * directory prefix, and any future `{{` in that code — a template literal, a generic in an unlucky
+ * position — would silently corrupt it. That is the exact hazard the copy/render split exists to
+ * prevent, and the reason no copy tree is ever rendered.
+ *
+ * ADDING A THIRD TREE means adding it here and nowhere else in code — but the three JSON configs that
+ * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `.oxlintrc.json`) must be updated
+ * by hand. `module-sources.test.ts` fails if you forget, which is the only reason that is safe.
+ */
+export const MODULE_COPY_TREES: readonly ModuleCopyTree[] = [
+  { directoryName: 'source', landsIn: 'projectRoot' },
+  { directoryName: 'packageSource', landsIn: 'packageRoot' },
+]
+
+/** Just the directory names, for the consumers that scan or glob rather than copy. */
+export const MODULE_COPY_TREE_DIRECTORY_NAMES: readonly string[] = MODULE_COPY_TREES.map(
+  (copyTree) => copyTree.directoryName,
+)
 
 /**
  * The package managers a generated project can use. Selected by the `packageManager` prompt.

@@ -14,6 +14,7 @@
  */
 import { cp, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
+import { MODULE_COPY_TREE_DIRECTORY_NAMES } from '../modules/module-contract.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
 const MODULES_DIRECTORY = path.join(FACTORY_ROOT, 'modules')
@@ -22,9 +23,6 @@ const DIST_MODULES_DIRECTORY = path.join(FACTORY_ROOT, 'dist', 'modules')
 /** Extension marking a Handlebars template the generator renders rather than copies. */
 const TEMPLATE_EXTENSION = '.hbs'
 
-/** Subdirectory of a module copied verbatim into generated projects. */
-const MODULE_SOURCE_DIRECTORY = 'source'
-
 async function copyModuleAssets(moduleName: string): Promise<string[]> {
   const moduleDirectory = path.join(MODULES_DIRECTORY, moduleName)
   const distModuleDirectory = path.join(DIST_MODULES_DIRECTORY, moduleName)
@@ -32,17 +30,22 @@ async function copyModuleAssets(moduleName: string): Promise<string[]> {
 
   const entries = await readdir(moduleDirectory, { withFileTypes: true })
 
-  const hasSourceTree = entries.some(
-    (entry) => entry.isDirectory() && entry.name === MODULE_SOURCE_DIRECTORY,
-  )
-  if (hasSourceTree) {
+  // Every copy tree, not just `source/`. Missing one here would publish a package whose generator
+  // resolves that tree at generation time and finds nothing — a failure that only the CONSUMER sees.
+  for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+    const hasCopyTree = entries.some(
+      (entry) => entry.isDirectory() && entry.name === copyTreeDirectoryName,
+    )
+    if (!hasCopyTree) {
+      continue
+    }
     await mkdir(distModuleDirectory, { recursive: true })
     await cp(
-      path.join(moduleDirectory, MODULE_SOURCE_DIRECTORY),
-      path.join(distModuleDirectory, MODULE_SOURCE_DIRECTORY),
+      path.join(moduleDirectory, copyTreeDirectoryName),
+      path.join(distModuleDirectory, copyTreeDirectoryName),
       { recursive: true },
     )
-    copied.push(`${moduleName}/source/`)
+    copied.push(`${moduleName}/${copyTreeDirectoryName}/`)
   }
 
   for (const entry of entries) {
