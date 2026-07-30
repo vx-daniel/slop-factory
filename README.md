@@ -220,31 +220,45 @@ and no tests, which **both** runners treat as a failure by default. Vitest gets 
 because the coverage floor still catches a silently-empty suite, and CI runs both); `bun test` has no
 such flag, which is why the `bun-test` module ships a real test of its own.
 
-## Not built: the `monorepo` module
+## Known limitations
 
-`modules/monorepo/` exists as an empty directory and is **not** registered. The workspace conversion
-does not fit this contract's channels: it must *rewrite* files other modules own (base's tsconfig
-`paths`, the `vitest` module's coverage globs) rather than add files of its own. Supporting it means a
-further channel — post-copy file transforms.
+Each is tracked as an issue rather than restated here, so there is one place to read the current state
+and one place to change it. The summaries below are pointers, not the record.
 
-It also needs three decisions made first, and each forecloses the others:
+| # | Limitation | Effect |
+|---|---|---|
+| [#1](https://github.com/vx-daniel/slop-factory/issues/1) | The `monorepo` module is unbuilt | `modules/monorepo/` is an empty, unregistered directory; single-package is the only layout offered |
+| [#2](https://github.com/vx-daniel/slop-factory/issues/2) | `generate` has no non-interactive mode | Requires a TTY; cannot run in CI or from a script |
+| [#3](https://github.com/vx-daniel/slop-factory/issues/3) | `bun + vitest` gets no `coverage-main.yml` | `COVERAGE.md` must be refreshed locally with `coverage:readme` |
+| [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | Placeholder `homepage`, no `repository` — blocks the first `npm publish` |
+| [#5](https://github.com/vx-daniel/slop-factory/issues/5) | `bun test` coverage is blind to untested files | An untested `src/` file is absent from the report while the total reads 100% |
+| [#6](https://github.com/vx-daniel/slop-factory/issues/6) | No committed `examples/` | Generated output can only be seen by running the generator, so module changes have no visible diff |
 
-1. Cross-package imports by package name (`@acme/core/...`) or explicit per-package aliases.
-2. tsconfig project references (which need `composite` + `declaration`, conflicting with the blanket
-   `noEmit` this ships) or one tsconfig pointing at every package's `src`.
-3. One of three Vitest discovery mechanisms — they do not compose, and mixing two is the most likely
-   thing to go wrong in the migration.
+Two of these are worth understanding before choosing options at the prompt:
 
-Offering a `monorepo` option that generates a subtly broken project is worse than not offering it, so
-the prompt does not ask. Reference material is in `.local/docs/monorepo.md` (gitignored, local only).
+**The `monorepo` option is not offered at all** ([#1](https://github.com/vx-daniel/slop-factory/issues/1)).
+It needs a third channel — post-copy file transforms — because the conversion *rewrites* files other
+modules own rather than adding files of its own, and it needs three mutually-foreclosing decisions made
+first (cross-package import style, tsconfig project references vs. one config, and which of three
+non-composing Vitest discovery mechanisms). Generating a subtly broken workspace is worse than offering
+nothing, so the prompt stays silent. Reference material: `.local/docs/monorepo.md` (gitignored, local).
+
+**Choosing `bun test` weakens the coverage floor more than the metric count suggests**
+([#5](https://github.com/vx-daniel/slop-factory/issues/5)). Measured on Bun 1.3.14: an untested
+`src/orphan.ts` containing a branch was absent from the coverage table entirely, the total still read
+`100.00`, and the floor passed. Bun has no equivalent of Vitest's `coverage.include`. The floor certifies
+that covered files are well covered — not that all files are covered.
 
 ## Publishing
+
+> **Not publish-ready yet** — see [#4](https://github.com/vx-daniel/slop-factory/issues/4) for the
+> metadata that has to land first.
 
 The published package is **only** `bin/`, `dist/`, and this README — `files` is an allowlist, so
 anything not named is absent from the tarball.
 
 ```bash
-npm publish        # prepublishOnly runs: check:all → test:packaging → verify
+npm publish        # prepublishOnly runs: check:all → test:prompts → test:packaging → verify
 ```
 
 `npm run build` does two things, and the split matters:
