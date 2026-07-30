@@ -36,7 +36,7 @@ export const vitestModule: ProjectModule = {
   },
 
   packageJsonFragment(answers: ProjectAnswers): PackageJsonFragment {
-    const runnerPrefix = typescriptRunnerPrefix(answers.projectRuntime)
+    const runnerPrefix = typescriptRunnerPrefix(answers.packageManager)
 
     return {
       scripts: {

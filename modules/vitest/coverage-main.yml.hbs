@@ -1,13 +1,15 @@
 # Refresh the committed COVERAGE.md after a push to main.
 #
-# WHY THIS LIVES IN THE NODE MODULE. It is BOTH Vitest-specific (it invokes `npx vitest run --coverage`
-# and reads Vitest's json-summary output) and npm-specific (`actions/setup-node`, `npm ci`). Node always
-# implies Vitest — the test-runner prompt is skipped under Node — so the node module is the one place
-# where both facts hold unconditionally. A Bun project does not get this workflow; refresh COVERAGE.md
-# with `bun run coverage:readme` locally, or add a Bun variant of this file.
+# WHY THIS LIVES IN THE VITEST MODULE. It is Vitest-specific: it reads the `json-summary` reporter's
+# output, which `bun test` does not produce. It used to be npm-specific too and therefore lived in the
+# node module, but the install steps are now interpolated from the selected manager, so the only real
+# dependency left is the test runner.
+#
+# It still only ships for Node managers, gated on `hasCoverageWorkflow` — see issue #3. That is now a
+# limitation rather than a necessity: nothing here would break under bun + Vitest.
 #
 # COVERAGE.md is a committed snapshot of coverage at the tip of main. The per-PR gate
-# (scripts/gate.ts / `npm run check:all`) enforces the coverage floor but does NOT freshness-check
+# (scripts/gate.ts / `{{runCommand}} check:all`) enforces the coverage floor but does NOT freshness-check
 # COVERAGE.md — doing that per-PR caused serial merge conflicts between in-flight PRs (each would
 # regenerate + commit it). Instead this job regenerates it once, after the merge lands on main, and
 # commits the result back, so the file always matches main's real coverage without blocking PRs.
@@ -36,28 +38,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+{{#if usesPnpm}}
+      # Before setup-node: `cache: pnpm` needs pnpm already on PATH. See ci.yml.hbs.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+{{/if}}
       - uses: actions/setup-node@v4
         with:
           node-version: '24' # matches the local toolchain (TypeScript 7, tsx)
-          cache: npm
+          cache: {{nodeCacheKey}}
 
       - name: Install dependencies
-        run: npm ci
+        run: {{ciInstallCommand}}
 
-      # Writes coverage/coverage-summary.json and enforces the thresholds (a below-floor main fails
-      # here — red main, no COVERAGE.md bump). No pre-build step: Vitest handles TS via esbuild.
+      # Vitest ALONE, deliberately — not the `coverage` npm script. That script also regenerates
+      # COVERAGE.md, which would make the `--check` below always report "unchanged" and nothing would
+      # ever be committed. This step only writes coverage/coverage-summary.json and enforces the
+      # thresholds (a below-floor main fails here — red main, no COVERAGE.md bump). No pre-build step:
+      # Vitest handles TS via esbuild.
       - name: Generate coverage data
-        run: npx vitest run --coverage
+        run: {{execCommand}} vitest run --coverage
 
       # Commit COVERAGE.md back only when the coverage data actually changed. `--check` ignores the
       # volatile header, so an identical coverage profile is a no-op.
       - name: Commit refreshed COVERAGE.md when coverage changed
         run: |
-          if node --import tsx scripts/coverage-to-markdown.ts --check; then
+          if {{typescriptRunner}} scripts/coverage-to-markdown.ts --check; then
             echo "COVERAGE.md already reflects current coverage — nothing to commit."
             exit 0
           fi
-          node --import tsx scripts/coverage-to-markdown.ts
+          {{typescriptRunner}} scripts/coverage-to-markdown.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add COVERAGE.md

@@ -17,7 +17,7 @@
  * keeps that from happening silently, so it belongs in CI rather than in a contributor's memory.
  *
  * WHAT IT DELIBERATELY DOES NOT DO: install dependencies or run the generated gate.
- * `tests/generation.test.ts` already installs and gates all six combinations in temp directories, which
+ * `tests/generation.test.ts` already installs and gates all eight combinations in temp directories, which
  * is both safer and more complete. Installing inside `examples/` would also fire the generated `prepare`
  * script, which runs `git config core.hooksPath .githooks` against THE FACTORY'S OWN repository — git
  * writes repo-level config regardless of the subdirectory you are standing in. See examples/README.md.
@@ -44,7 +44,7 @@ interface ExampleProject {
    * drift. Determinism beats a prettier `name` field in a `private: true` package nobody publishes.
    */
   readonly directoryName: string
-  readonly projectRuntime: 'node' | 'bun'
+  readonly packageManager: 'npm' | 'pnpm' | 'bun'
   readonly testRunner: 'vitest' | 'bun-test'
   readonly enableFeatures: readonly string[]
   /** Why this combination is the one committed — surfaced in examples/README.md. */
@@ -52,27 +52,36 @@ interface ExampleProject {
 }
 
 /**
- * The committed combinations. Two of the six, chosen for information density rather than coverage —
- * `tests/generation.test.ts` is what covers all six.
+ * The committed combinations. Three of the eight, chosen for information density rather than coverage —
+ * `tests/generation.test.ts` is what covers all eight.
  */
 const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
   {
-    directoryName: 'node',
-    projectRuntime: 'node',
+    directoryName: 'npm',
+    packageManager: 'npm',
     testRunner: 'vitest',
     enableFeatures: ['config'],
     rationale:
-      'The default path. Node implies Vitest (the runner prompt is skipped), so this is the only ' +
-      'shape a Node answer can produce.',
+      'The default path. npm implies Node and therefore Vitest (the runner prompt is skipped), so this ' +
+      'is the only shape an npm answer can produce.',
+  },
+  {
+    directoryName: 'pnpm',
+    packageManager: 'pnpm',
+    testRunner: 'vitest',
+    enableFeatures: ['config'],
+    rationale:
+      'Committed despite differing from the npm example in only a handful of files, because those files ' +
+      'are the ones people get wrong: the lockfile rule, and the CI step ORDER that pnpm requires.',
   },
   {
     directoryName: 'bun',
-    projectRuntime: 'bun',
+    packageManager: 'bun',
     testRunner: 'bun-test',
     enableFeatures: ['config'],
     rationale:
-      "Bun with its own test runner. Chosen over bun + Vitest because that combination differs from " +
-      'the Node example in only a handful of files, while this one is a genuinely different tree.',
+      "Bun with its own test runner. Chosen over bun + Vitest because that combination differs from the " +
+      'npm example in only a handful of files, while this one is a genuinely different tree.',
   },
 ]
 
@@ -164,14 +173,14 @@ async function refreshExamples(): Promise<number> {
     await generateProject({
       projectName: example.directoryName,
       workspaceDirectory: EXAMPLES_DIRECTORY,
-      projectRuntime: example.projectRuntime,
+      packageManager: example.packageManager,
       testRunner: example.testRunner,
       enableFeatures: example.enableFeatures,
     })
     const fileCount = (await listFilesRecursively(targetDirectory)).length
     process.stdout.write(
       `  regenerated examples/${example.directoryName} ` +
-        `(${example.projectRuntime} + ${example.testRunner}, ${fileCount} files)\n`,
+        `(${example.packageManager} + ${example.testRunner}, ${fileCount} files)\n`,
     )
   }
   process.stdout.write('\nexamples:refresh done. Review the diff before committing.\n')
@@ -198,7 +207,7 @@ async function checkExamples(): Promise<number> {
       const generatedDirectory = await generateProject({
         projectName: example.directoryName,
         workspaceDirectory,
-        projectRuntime: example.projectRuntime,
+        packageManager: example.packageManager,
         testRunner: example.testRunner,
         enableFeatures: example.enableFeatures,
       })

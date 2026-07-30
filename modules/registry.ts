@@ -5,6 +5,8 @@ import { configModule } from './config/module.js'
 import { gateModule } from './gate/module.js'
 import type { ProjectModule } from './module-contract.js'
 import { nodeModule } from './node/module.js'
+import { npmModule } from './npm/module.js'
+import { pnpmModule } from './pnpm/module.js'
 import { vitestModule } from './vitest/module.js'
 
 /**
@@ -17,8 +19,9 @@ import { vitestModule } from './vitest/module.js'
  * the always-on modules, then the runtime choice, then the test-runner choice, then opt-in features.
  *
  * TWO PAIRS ARE MUTUALLY EXCLUSIVE and the registry does not enforce that — the `isSelected`
- * predicates do, keyed off a single answer each. `node`/`bun` key off `projectRuntime`; `vitest`/
- * `bun-test` off `testRunner`. `registry.test.ts` asserts exactly one of each pair is ever selected,
+ * predicates do, keyed off a single answer each. `npm`/`pnpm`/`bun` key off `packageManager`,
+ * and `node` off the runtime that manager implies (so it covers npm and pnpm both); `vitest`/`bun-test`
+ * key off `testRunner`. `registry.test.ts` asserts exactly one of each pair is ever selected,
  * because two selected runtimes would contribute conflicting `engines` and two selected test runners
  * would conflict on the `test` script.
  *
@@ -38,6 +41,8 @@ export const PROJECT_MODULES: readonly ProjectModule[] = [
   baseModule,
   gateModule,
   nodeModule,
+  npmModule,
+  pnpmModule,
   bunModule,
   vitestModule,
   bunTestModule,

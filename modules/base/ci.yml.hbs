@@ -1,0 +1,75 @@
+{{! ─────────────────────────────────────────────────────────────────────────────────────────────────
+    THIS IS A HANDLEBARS TEMPLATE, not a workflow to copy verbatim.
+
+    Note `$\{{ github.ref }}` below: the backslash escapes the braces so Handlebars emits a literal
+    `${{ github.ref }}` into the generated file. Without it, Handlebars resolves `{{ github.ref }}`
+    against the answers, finds nothing, emits an empty string, and leaves a bare `$` — a silently
+    broken workflow that installs and typechecks fine and fails only in CI.
+
+    It is a template rather than one verbatim file per manager because npm, pnpm and Bun differ in
+    exactly two places: the setup steps and the install command. Three near-identical 50-line copies
+    was the alternative.
+
+    `tests/generation.test.ts` asserts the generated file contains `${{ github.ref }}` intact, so
+    breaking the escape fails the suite rather than shipping.
+    ───────────────────────────────────────────────────────────────────────────────────────────────── }}
+# CI — the enforced quality gate.
+#
+# Runs the SAME gate as the local pre-commit hook (`{{runCommand}} check:all` = Biome + tsc + tests), so
+# "green" means one thing whether it ran on your machine or here. A commit made with `--no-verify`, or by
+# someone without the hook installed, is caught at the PR instead of slipping into main. The only thing
+# CI adds beyond the gate is coverage-threshold enforcement.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels an in-flight run — no point finishing stale CI.
+concurrency:
+  group: ci-$\{{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+{{#if isBunRuntime}}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3' # matches the `engines.bun` floor in package.json
+{{else}}
+{{#if usesPnpm}}
+
+      # MUST come before setup-node. `cache: pnpm` asks setup-node to locate the pnpm store, which
+      # requires pnpm to already be on PATH. Reversing these two reports as a cache error rather than a
+      # missing binary, which is why the order is called out here.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+{{/if}}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24' # matches the `engines.node` floor in package.json
+          cache: {{nodeCacheKey}}
+{{/if}}
+
+      # The frozen / `ci` form, not a plain install: it fails when the lockfile and package.json
+      # disagree instead of silently resolving a different tree. Without it CI can pass against versions
+      # no developer has installed.
+      - name: Install dependencies
+        run: {{ciInstallCommand}}
+
+      - name: Gate (Biome + tsc + tests)
+        run: {{runCommand}} check:all
+
+      - name: Coverage thresholds
+        run: {{runCommand}} coverage

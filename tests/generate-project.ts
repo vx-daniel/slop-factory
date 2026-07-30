@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import nodePlop from 'node-plop'
 import { resolvePlopfilePath } from '../plopfile-path.js'
-import type { ProjectRuntime, TestRunner } from '../modules/module-contract.js'
+import type { PackageManager, TestRunner } from '../modules/module-contract.js'
 
 /**
  * Resolved at MODULE LOAD, not per call — so importing this helper throws if the factory has not been
@@ -16,7 +16,7 @@ const GENERATOR_NAME = 'generate'
 export interface GenerationRequest {
   readonly projectName: string
   readonly workspaceDirectory: string
-  readonly projectRuntime: ProjectRuntime
+  readonly packageManager: PackageManager
   readonly testRunner: TestRunner
   readonly enableFeatures: readonly string[]
 }
@@ -41,7 +41,7 @@ export async function generateProject(request: GenerationRequest): Promise<strin
   const result = await generator.runActions({
     projectName: request.projectName,
     projectPath: request.workspaceDirectory,
-    projectRuntime: request.projectRuntime,
+    packageManager: request.packageManager,
     testRunner: request.testRunner,
     enableFeatures: [...request.enableFeatures],
   })
@@ -83,8 +83,10 @@ export function runCommand(options: {
 export const shouldKeepGeneratedTrees = process.env.KEEP_GENERATED_TREES !== undefined
 
 /** Whether a runtime's binary is on PATH, so an absent Bun is skipped rather than failed. */
-export function isRuntimeAvailable(runtime: ProjectRuntime): boolean {
-  return spawnSync(runtime, ['--version'], { stdio: 'ignore' }).status === 0
+export function isRuntimeAvailable(packageManager: PackageManager): boolean {
+  // The binary to probe is the manager itself: npm, pnpm or bun. A machine without pnpm should report
+  // SKIP for the pnpm combinations rather than a broken factory.
+  return spawnSync(packageManager, ['--version'], { stdio: 'ignore' }).status === 0
 }
 
 /**

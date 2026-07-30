@@ -7,8 +7,8 @@ import {
   mergeTemplateData,
   type PackageJsonFragment,
   type ProjectAnswers,
-  PROJECT_RUNTIMES,
-  type ProjectRuntime,
+  PACKAGE_MANAGERS,
+  type PackageManager,
   renderPackageJson,
   TEST_RUNNERS,
   type TestRunner,
@@ -64,28 +64,28 @@ function validateProjectName(rawName: string): true | string {
 }
 
 /**
- * Rejects a runtime answer that is missing or not one the factory knows.
+ * Rejects a package-manager answer that is missing or not one the factory knows.
  *
- * This exists because the failure it prevents is SILENT. Every runtime-specific contribution — the
- * `engines` field, tsx, the CI workflow — comes from the `node` or `bun` module, and each is selected by
- * an equality test against this value. An `undefined` runtime satisfies neither, so the generator
- * cheerfully produces a project with no runtime module at all: no `engines`, no tsx, and a `check:all`
- * that fails on the first run with `Cannot find package 'tsx'`. Nothing upstream complains, because a
- * cast (`as ProjectRuntime`) is a claim rather than a check.
+ * This exists because the failure it prevents is SILENT. Every manager-specific contribution — the
+ * install commands, the lockfile rule, the CI setup steps — and every runtime-specific one — `engines`,
+ * tsx — comes from a module selected by an equality test against this value. An `undefined` manager
+ * satisfies none of them, so the generator cheerfully produces a project with no manager and no runtime
+ * module: no `engines`, no tsx, and a `check:all` that fails on the first run with
+ * `Cannot find package 'tsx'`. Nothing upstream complains, because a cast is a claim rather than a check.
  *
  * Found the hard way: deleting the runtime PROMPT while refactoring produced exactly that project, and
  * the generation suite did not notice — it supplies answers directly and never runs the prompts, so the
  * only thing that would have caught it is a check here.
  */
-function assertKnownRuntime(rawRuntime: unknown): ProjectRuntime {
-  if (!PROJECT_RUNTIMES.some((knownRuntime) => knownRuntime === rawRuntime)) {
+function assertKnownPackageManager(rawManager: unknown): PackageManager {
+  if (!PACKAGE_MANAGERS.some((knownManager) => knownManager === rawManager)) {
     throw new Error(
-      `projectRuntime must be one of ${PROJECT_RUNTIMES.join(', ')} but was ${JSON.stringify(rawRuntime)}. ` +
-        'If this came from the generator, its runtime prompt is missing or renamed — without a runtime ' +
-        'module the project ships with no engines field and no way to execute its TypeScript.',
+      `packageManager must be one of ${PACKAGE_MANAGERS.join(', ')} but was ${JSON.stringify(rawManager)}. ` +
+        'If this came from the generator, its package-manager prompt is missing or renamed — without a ' +
+        'manager module the project has no install commands, no engines field, and no CI workflow.',
     )
   }
-  return rawRuntime as ProjectRuntime
+  return rawManager as PackageManager
 }
 
 /**
@@ -112,18 +112,18 @@ function assertKnownTestRunner(rawTestRunner: unknown): TestRunner {
  * fails in one obvious place instead of surfacing as an `undefined` deep inside a fragment.
  */
 function toProjectAnswers(rawAnswers: Record<string, unknown>): ProjectAnswers {
-  const projectRuntime = assertKnownRuntime(rawAnswers.projectRuntime)
+  const packageManager = assertKnownPackageManager(rawAnswers.packageManager)
 
   return {
     projectName: String(rawAnswers.projectName).trim(),
     // Resolved against the operator's cwd here, once, so every module and action downstream can treat
     // it as absolute. `.` — the default answer — therefore means "the directory I ran this from".
     projectPath: path.resolve(String(rawAnswers.projectPath).trim()),
-    projectRuntime,
-    // Forced rather than trusted for Node: `bun test` requires the Bun runtime, so the prompt is
-    // skipped entirely under Node and the answer would be `undefined`. Normalizing here means no
-    // module has to defend against that combination.
-    testRunner: projectRuntime === 'bun' ? assertKnownTestRunner(rawAnswers.testRunner) : 'vitest',
+    packageManager,
+    // Forced rather than trusted for npm and pnpm: `bun test` ships with the Bun runtime, so the prompt
+    // is skipped for them and the answer would be `undefined`. Normalizing here means no module has to
+    // defend against that combination.
+    testRunner: packageManager === 'bun' ? assertKnownTestRunner(rawAnswers.testRunner) : 'vitest',
     enableFeatures: Array.isArray(rawAnswers.enableFeatures)
       ? (rawAnswers.enableFeatures as string[])
       : [],
@@ -240,23 +240,26 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         default: '.',
         validate: validateDestinationDirectory,
       },
+      // ONE question, not two. The manager determines the runtime — see PACKAGE_MANAGERS in
+      // module-contract.ts for why modelling them separately was rejected.
       {
         type: 'list',
-        name: 'projectRuntime',
-        message: 'Which runtime will this project use?',
+        name: 'packageManager',
+        message: 'Which package manager?',
         choices: [
-          { name: 'Node.js 24 (npm, runs .ts through tsx)', value: 'node' },
-          { name: 'Bun (runs .ts natively, keeps Vitest)', value: 'bun' },
+          { name: 'npm  — Node 24, .ts through tsx, package-lock.json', value: 'npm' },
+          { name: 'pnpm — Node 24, .ts through tsx, strict store, pnpm-lock.yaml', value: 'pnpm' },
+          { name: 'bun  — Bun runtime, .ts natively, bun.lock', value: 'bun' },
         ],
       },
-      // Asked only under Bun, because `bun test` needs the Bun runtime — a Node project has exactly
-      // one possible answer, and a question with one answer is noise. `toProjectAnswers` forces
+      // Asked only for bun, because `bun test` ships with the Bun runtime — an npm or pnpm project has
+      // exactly one possible answer, and a question with one answer is noise. `toProjectAnswers` forces
       // `vitest` in that case.
       {
         type: 'list',
         name: 'testRunner',
         message: 'Which test runner? (Bun ships its own; Vitest keeps full coverage)',
-        when: (answers): boolean => answers.projectRuntime === 'bun',
+        when: (answers): boolean => answers.packageManager === 'bun',
         choices: [
           {
             name: 'Vitest — recommended: 4 coverage metrics, COVERAGE.md, passWithNoTests',

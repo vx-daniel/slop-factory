@@ -5,8 +5,8 @@ import { PROJECT_MODULES } from './registry.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
 
-/** Both runtime answers, so selection can be exercised without hardcoding a combination per test. */
-const RUNTIMES = ['node', 'bun'] as const
+/** The manager modules, one of which must be selected for any answer set. */
+const MANAGER_MODULES = ['npm', 'pnpm', 'bun'] as const
 
 /** The mutually-exclusive test-runner modules. */
 const TEST_RUNNER_MODULES = ['vitest', 'bun-test'] as const
@@ -14,17 +14,19 @@ const TEST_RUNNER_MODULES = ['vitest', 'bun-test'] as const
 /**
  * Every combination the prompts can actually produce.
  *
- * `bun-test` appears only with the bun runtime, because the prompt is skipped under Node and
- * `toProjectAnswers` forces `vitest` there — asserting a node + bun-test combination would be
- * asserting behaviour for an answer set the generator cannot produce.
+ * `bun-test` appears only with the bun manager, because the prompt is skipped for npm and pnpm and
+ * `toProjectAnswers` forces `vitest` there — asserting an npm + bun-test combination would be asserting
+ * behaviour for an answer set the generator cannot produce.
  */
 const REACHABLE_ANSWERS = [
-  { projectRuntime: 'node', testRunner: 'vitest', enableFeatures: [] },
-  { projectRuntime: 'node', testRunner: 'vitest', enableFeatures: ['config'] },
-  { projectRuntime: 'bun', testRunner: 'vitest', enableFeatures: [] },
-  { projectRuntime: 'bun', testRunner: 'vitest', enableFeatures: ['config'] },
-  { projectRuntime: 'bun', testRunner: 'bun-test', enableFeatures: [] },
-  { projectRuntime: 'bun', testRunner: 'bun-test', enableFeatures: ['config'] },
+  { packageManager: 'npm', testRunner: 'vitest', enableFeatures: [] },
+  { packageManager: 'npm', testRunner: 'vitest', enableFeatures: ['config'] },
+  { packageManager: 'pnpm', testRunner: 'vitest', enableFeatures: [] },
+  { packageManager: 'pnpm', testRunner: 'vitest', enableFeatures: ['config'] },
+  { packageManager: 'bun', testRunner: 'vitest', enableFeatures: [] },
+  { packageManager: 'bun', testRunner: 'vitest', enableFeatures: ['config'] },
+  { packageManager: 'bun', testRunner: 'bun-test', enableFeatures: [] },
+  { packageManager: 'bun', testRunner: 'bun-test', enableFeatures: ['config'] },
 ] as const
 
 describe('module registry', () => {
@@ -43,18 +45,18 @@ describe('module registry', () => {
     expect(new Set(names).size).toBe(names.length)
   })
 
-  it('selects exactly one runtime module for every reachable answer set', () => {
-    // Two selected runtimes would contribute conflicting `engines`; zero would leave the project with
-    // no declared runtime at all. Both are silent failures without this check.
+  it('selects exactly one manager module for every reachable answer set', () => {
+    // Two selected managers would contribute conflicting install commands; zero would leave the project
+    // with no CI workflow and no engines field. Both are silent failures without this check.
     for (const answers of REACHABLE_ANSWERS) {
-      const selectedRuntimeModules = PROJECT_MODULES.filter(
+      const selectedManagerModules = PROJECT_MODULES.filter(
         (projectModule) =>
           projectModule.isSelected({ projectName: 'example', projectPath: '/tmp', ...answers }) &&
-          RUNTIMES.some((runtimeName) => runtimeName === projectModule.name),
+          MANAGER_MODULES.some((moduleName) => moduleName === projectModule.name),
       )
 
-      expect(selectedRuntimeModules.map((projectModule) => projectModule.name)).toEqual([
-        answers.projectRuntime,
+      expect(selectedManagerModules.map((projectModule) => projectModule.name)).toEqual([
+        answers.packageManager,
       ])
     }
   })
@@ -91,8 +93,8 @@ describe('module registry', () => {
         ),
       )
 
-      expect(merged.scripts, `${answers.projectRuntime}/${answers.testRunner}`).toHaveProperty('test')
-      expect(merged.scripts, `${answers.projectRuntime}/${answers.testRunner}`).toHaveProperty(
+      expect(merged.scripts, `${answers.packageManager}/${answers.testRunner}`).toHaveProperty('test')
+      expect(merged.scripts, `${answers.packageManager}/${answers.testRunner}`).toHaveProperty(
         'coverage',
       )
     }
@@ -147,7 +149,7 @@ describe('module rendered templates', () => {
         (projectModule.renderedTemplates?.(fullAnswers) ?? []).map((template) => template.outputPath),
       )
 
-      expect(new Set(outputPaths).size, `${answers.projectRuntime}/${answers.testRunner}`).toBe(
+      expect(new Set(outputPaths).size, `${answers.packageManager}/${answers.testRunner}`).toBe(
         outputPaths.length,
       )
     }
@@ -174,7 +176,17 @@ describe('module rendered templates', () => {
     // renders its `{{else}}` branch instead of erroring. Dropping `usesVitest` would make every project
     // document itself as a bun-test project.
     const { mergeTemplateData } = await import('./module-contract.js')
-    const REQUIRED_FLAGS = ['isBunRuntime', 'runCommand', 'installCommand', 'usesVitest']
+    const REQUIRED_FLAGS = [
+      'isBunRuntime',
+      'runCommand',
+      'installCommand',
+      'ciInstallCommand',
+      'execCommand',
+      'typescriptRunner',
+      'committedLockfile',
+      'ignoredLockfiles',
+      'usesVitest',
+    ]
 
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
@@ -188,7 +200,7 @@ describe('module rendered templates', () => {
       )
 
       for (const flag of REQUIRED_FLAGS) {
-        expect(flag in merged, `${flag} unset for ${answers.projectRuntime}/${answers.testRunner}`).toBe(
+        expect(flag in merged, `${flag} unset for ${answers.packageManager}/${answers.testRunner}`).toBe(
           true,
         )
       }

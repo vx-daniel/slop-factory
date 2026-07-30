@@ -45,7 +45,7 @@ export const gateModule: ProjectModule = {
         format: 'biome format --write',
         typecheck: 'tsc --noEmit',
         // The gate runner is itself TypeScript, so it needs the runtime's `.ts` execution prefix.
-        'check:all': `${typescriptRunnerPrefix(answers.projectRuntime)} scripts/gate.ts`,
+        'check:all': `${typescriptRunnerPrefix(answers.packageManager)} scripts/gate.ts`,
       },
       devDependencies: {
         '@biomejs/biome': BIOME_VERSION,
