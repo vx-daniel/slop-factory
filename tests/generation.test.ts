@@ -3,7 +3,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PROJECT_MODULES } from '../modules/registry.js'
-import { isBunRuntime, type PackageManager, type TestRunner } from '../modules/module-contract.js'
+import {
+  DEFAULT_FIRST_PACKAGE_NAME,
+  isBunRuntime,
+  type PackageManager,
+  type ProjectAnswers,
+  type TestRunner,
+} from '../modules/module-contract.js'
 import {
   generateProject,
   isIgnoredByGit,
@@ -99,8 +105,21 @@ describe.each(COMBINATIONS)('$label', (combination) => {
   const usesBunRuntime = isBunRuntime(packageManager)
   const managerAvailable = isPackageManagerAvailable(packageManager)
 
-  /** The answer object the modules see — used to derive expectations rather than restating them. */
-  const answers = { projectName: 'irrelevant', projectPath: '/tmp', packageManager, testRunner, enableFeatures }
+  /**
+   * The answer object the modules see — used to derive expectations rather than restating them.
+   *
+   * `projectStructure` is `single` because that is what these combinations generate; the monorepo layout
+   * is a separate axis with its own combinations rather than a variant of these.
+   */
+  const answers: ProjectAnswers = {
+    projectName: 'irrelevant',
+    projectPath: '/tmp',
+    packageManager,
+    testRunner,
+    projectStructure: 'single',
+    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+    enableFeatures,
+  }
 
   let projectDirectory: string
 

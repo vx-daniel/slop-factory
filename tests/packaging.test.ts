@@ -3,6 +3,7 @@ import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { PROJECT_MODULES } from '../modules/registry.js'
 import {
+  DEFAULT_FIRST_PACKAGE_NAME,
   isBunRuntime,
   PACKAGE_MANAGERS,
   TEST_RUNNERS,
@@ -97,6 +98,10 @@ const REACHABLE_ANSWERS: readonly ProjectAnswers[] = PACKAGE_MANAGERS.flatMap((p
     projectPath: '/tmp',
     packageManager,
     testRunner,
+    // `single` only: this suite asks which templates a module DECLARES, and no module varies that by
+    // layout. A monorepo entry would add combinations without adding a distinct declared template.
+    projectStructure: 'single' as const,
+    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
     enableFeatures: ['config'],
   })),
 )

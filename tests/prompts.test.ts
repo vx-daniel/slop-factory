@@ -82,6 +82,26 @@ describe('generator prompts', () => {
     )
   })
 
+  it('does not yet offer the project-structure question', async () => {
+    // Asserts an ABSENCE on purpose, and it is meant to fail the day the monorepo layout is finished.
+    //
+    // The plumbing that resolves the package root and writes the `workspaces` field is in place, but the
+    // per-module template changes are not: a generated monorepo's tsconfig `paths` and test-discovery
+    // globs still assume `single`. Offering the choice now would produce a project that installs and
+    // typechecks and is quietly wrong, which #1 says is worse than not offering it.
+    //
+    // So this is the tripwire. Adding the prompt without the template changes fails here; adding both
+    // together means deleting this test and asserting the choices against `PROJECT_STRUCTURES` instead,
+    // the way the manager and runner prompts already are.
+    const promptNames = (await loadGeneratorPrompts()).map((prompt) => prompt.name)
+
+    expect(
+      promptNames,
+      'a projectStructure prompt exists — if the monorepo template changes have landed, replace this ' +
+        'test with one asserting its choices match PROJECT_STRUCTURES',
+    ).not.toContain('projectStructure')
+  })
+
   it('asks the test-runner question only for the bun manager', async () => {
     // For npm and pnpm there is exactly one possible answer, and a question with one answer is noise.
     const prompts = await loadGeneratorPrompts()
