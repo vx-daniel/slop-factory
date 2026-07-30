@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(gh pr create:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Bash(git push * +*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f)",
+      "Bash(git push * --delete *)",
+      "Bash(git commit --no-verify*)",
+      "Bash(git commit * --no-verify*)",
+      "Bash(git commit *-n*)"
+    ],
+    "defaultMode": "default"
+  }
+}

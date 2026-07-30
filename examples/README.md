@@ -1,7 +1,7 @@
 # Examples
 
-Real generated projects — one per package manager — committed so the factory's output can be read
-without running it.
+Real generated projects — one per package manager, plus one per layout — committed so the factory's
+output can be read without running it.
 
 **These are generated artifacts, not hand-maintained code.** Do not edit them directly — edit the module
 that produces the file, then run `npm run examples:refresh` from the repository root.
@@ -38,22 +38,27 @@ $ cd ../.. && git config core.hooksPath
 If you have already done it, `git config --unset core.hooksPath` (or set it back to whatever the factory
 uses) puts it right.
 
-**There is no reason to install here.** `tests/generation.test.ts` already installs and gates all eight
-combinations in throwaway temp directories, which is safer and more complete than anything these trees
-could prove. These exist to be *read* and *diffed*, not executed.
+**There is no reason to install here.** `tests/generation.test.ts` enumerates every reachable combination
+and installs and gates ten of them in throwaway temp directories, printing the ones it does not — safer
+and more complete than anything these trees could prove. These exist to be *read* and *diffed*, not
+executed.
 
-## What is committed, and why only these three
+## What is committed, and why only these four
 
 | Directory | Answers | Why this one |
 |---|---|---|
 | [`npm/`](npm/) | manager `npm`, runner `vitest`, features `config` | The default path. npm implies Node and therefore Vitest — the runner prompt is skipped — so this is the only shape an npm answer can produce. |
 | [`pnpm/`](pnpm/) | manager `pnpm`, runner `vitest`, features `config` | Differs from `npm/` in only eight files, and is committed *because* those are the eight people get wrong: the lockfile rule, and the CI step **order** pnpm requires. |
 | [`bun/`](bun/) | manager `bun`, runner `bun-test`, features `config` | Bun with its own runner. Chosen over bun + Vitest because that combination differs from `npm/` in only a handful of files, while this one is a genuinely different tree. |
+| [`monorepo/`](monorepo/) | layout `monorepo`, manager `npm`, runner `vitest`, features `config` | The workspace layout — the only example that differs **structurally**: source moves under `packages/core/`, config stays at the root. Paired with npm + Vitest because the manager and runner deltas are already readable above, so this isolates the layout. |
 
-The generator offers **eight** combinations (three managers × config on/off, plus the second runner
-choice that only the bun manager can reach). Five are not committed, deliberately: every combination is
-already generated, installed, and gated by `tests/generation.test.ts`, so committing all eight would add
-review surface without adding verification.
+The generator offers **sixteen** combinations (two layouts × three managers × config on/off, plus the
+second runner choice that only the bun manager can reach). Twelve are not committed, deliberately:
+`tests/generation.test.ts` enumerates every one and installs and gates ten, so committing them all would
+add review surface without adding verification.
+
+The first three above vary by **manager and runner** — differences measured in a handful of files. The
+fourth varies by **layout**, which is the only axis that changes the shape of the tree.
 
 ### Why `pnpm/` earns its place and `bun` + Vitest does not
 
@@ -87,7 +92,24 @@ bun + Vitest project differs in only:
 Everything else — `vitest.config.ts`, the four-metric floor, the `COVERAGE.md` pipeline, `src/config/` —
 is identical to `npm/`.
 
-### The `config` feature is on in all three
+### What the monorepo example shows that the others cannot
+
+The layout is the one axis where reading a diff beats reading prose, because the tree itself changes:
+
+```
+monorepo/
+  package.json          ← "workspaces": ["packages/*"], all devDependencies, the lockfile
+  tsconfig.json         ← ONE config; "@core/*" → "./packages/core/src/*"
+  vitest.config.ts      ← NO test.include; discovery is "--dir packages" in the scripts
+  config.defaults.toml  ← stays at the root: the loader walks UP to find it
+  packages/core/
+    package.json        ← required; a directory here without one is not a workspace member
+    src/config/         ← moved from the root
+```
+
+Diff it against [`npm/`](npm/) — same manager, same runner, so **every difference is the layout**.
+
+### The `config` feature is on in all four
 
 Every example enables the layered-TOML feature, because without it a generated project contains **no
 source code and no tests at all** — `src/` does not exist. That variant is worth *verifying* (both
@@ -96,12 +118,14 @@ floor-guard test exist) but it is not worth *reading*.
 
 ## A note on the `name` field
 
-`package.json` in each example reads `"name": "npm"` / `"pnpm"` / `"bun"`, which is not a name anyone
-would choose. The example's directory name and the generated project name are deliberately the same
-string:
-generating under a nicer name and renaming afterwards would force `examples:check` to reproduce the
-rename, and any mismatch there would surface as phantom drift. Determinism beat cosmetics in a
-`private: true` package that is never published.
+`package.json` in each example reads `"name": "npm"` / `"pnpm"` / `"bun"` / `"monorepo"`, which is not a
+name anyone would choose. The example's directory name and the generated project name are deliberately
+the same string: generating under a nicer name and renaming afterwards would force `examples:check` to
+reproduce the rename, and any mismatch there would surface as phantom drift. Determinism beat cosmetics
+in a `private: true` package that is never published.
+
+It shows up twice in the workspace example, since the package name is scoped to the project:
+`packages/core/package.json` reads `"@monorepo/core"`. Same reasoning.
 
 ## What the diff is for
 
