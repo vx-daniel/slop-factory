@@ -41,7 +41,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck and unit tests
+      # oxlint → tsc → Vitest, cheap-first. See docs/lint-parity.md for how the factory's oxlint config
+      # relates to the Biome config it ships to generated projects, and what it cannot enforce.
+      - name: Lint, typecheck, unit tests
         run: npm run check:all
 
       - name: Prompt contract

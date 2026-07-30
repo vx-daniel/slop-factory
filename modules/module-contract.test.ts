@@ -7,7 +7,10 @@ import {
 } from './module-contract.js'
 
 /** Builds the `{ moduleName, fragment }` pair shape `mergePackageJsonFragments` consumes. */
-function contribution(moduleName: string, fragment: PackageJsonFragment) {
+function contribution(
+  moduleName: string,
+  fragment: PackageJsonFragment,
+): { moduleName: string; fragment: PackageJsonFragment } {
   return { moduleName, fragment }
 }
 
@@ -34,7 +37,7 @@ describe('mergePackageJsonFragments', () => {
   })
 
   it('throws when two modules set the same key to different values', () => {
-    const merge = () =>
+    const merge = (): PackageJsonFragment =>
       mergePackageJsonFragments([
         contribution('gate', { scripts: { test: 'vitest run' } }),
         contribution('base', { scripts: { test: 'bun test' } }),
@@ -46,7 +49,7 @@ describe('mergePackageJsonFragments', () => {
   it('names both modules and the conflicting key, so the cause is locatable', () => {
     // The whole point of throwing rather than last-write-wins is that the message tells you WHERE to
     // look. A bare "conflict detected" would leave the operator grepping five modules by hand.
-    const merge = () =>
+    const merge = (): PackageJsonFragment =>
       mergePackageJsonFragments([
         contribution('gate', { devDependencies: { typescript: '~7.0.2' } }),
         contribution('node', { devDependencies: { typescript: '~5.9.3' } }),

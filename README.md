@@ -39,6 +39,8 @@ npx slop-factory --version
 ```bash
 npm install
 npm run generate          # builds, then runs the same CLI npx would run
+npm run check:all         # the gate: oxlint → tsc → unit tests, cheap-first
+npm run lint              # oxlint on its own (lint:fix to autofix)
 npm run typecheck         # typechecks the factory
 npm test                  # fast unit tests: merge/render logic, registry invariants, source-tree guards
 npm run test:prompts      # reads the generator's prompt list and checks it against the contract
@@ -50,6 +52,11 @@ KEEP_GENERATED_TREES=1 npm run verify   # same, but leaves the trees on disk to 
 ```
 
 `.github/workflows/ci.yml` runs all of the above on every push and pull request.
+
+**The factory lints itself with oxlint, not the Biome it prescribes for generated projects.** That is a
+deliberate divergence with real gaps — most importantly the abbreviation/naming gate has no oxlint
+counterpart, and oxlint has no formatter. [docs/lint-parity.md](docs/lint-parity.md) is the rule-for-rule
+accounting; read it before treating a green `npm run lint` as equivalent to a green Biome gate.
 
 **The factory always runs its built output, never its TypeScript source** — including in development.
 That is not a preference; two independent constraints force it, and both were measured:

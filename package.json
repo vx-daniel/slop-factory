@@ -33,24 +33,27 @@
     "README.md"
   ],
   "scripts": {
-    "generate": "npm run build && node bin/slop-factory.mjs generate",
-    "plop": "plop",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --project unit",
-    "verify": "npm run build && vitest run --project generation",
     "build": "tsc -p tsconfig.build.json && node --import tsx scripts/copy-dist-assets.ts",
-    "check:all": "npm run typecheck && npm run test",
+    "check:all": "npm run lint && npm run typecheck && npm run test",
+    "examples:check": "npm run build && node --import tsx scripts/examples.ts check",
+    "examples:refresh": "npm run build && node --import tsx scripts/examples.ts refresh",
+    "generate": "npm run build && node bin/slop-factory.mjs generate",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "plop": "plop",
     "prepublishOnly": "npm run check:all && npm run test:prompts && npm run test:packaging && npm run examples:check && npm run verify",
+    "test": "vitest run --project unit",
     "test:packaging": "vitest run --project packaging",
     "test:prompts": "npm run build && vitest run --project prompts",
-    "examples:refresh": "npm run build && node --import tsx scripts/examples.ts refresh",
-    "examples:check": "npm run build && node --import tsx scripts/examples.ts check"
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run build && vitest run --project generation"
   },
   "dependencies": {
     "node-plop": "^0.32.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "oxlint": "^1.76.0",
     "plop": "^4.0.5",
     "tsx": "^4.23.1",
     "typescript": "~5.9.3",

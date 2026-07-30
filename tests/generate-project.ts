@@ -72,6 +72,16 @@ export function runCommand(options: {
   }
 }
 
+/**
+ * Whether to leave generated trees on disk instead of cleaning up, for inspecting a failure.
+ *
+ * Read HERE rather than in the test file on purpose. `node/no-process-env` is an error in `*.test.ts` —
+ * a test reaching for `process.env` couples to ambient state that dependency injection exists to avoid —
+ * but this harness module is the composition root, which is exactly where the convention says a single
+ * env read belongs.
+ */
+export const shouldKeepGeneratedTrees = process.env.KEEP_GENERATED_TREES !== undefined
+
 /** Whether a runtime's binary is on PATH, so an absent Bun is skipped rather than failed. */
 export function isRuntimeAvailable(runtime: ProjectRuntime): boolean {
   return spawnSync(runtime, ['--version'], { stdio: 'ignore' }).status === 0

@@ -9,6 +9,7 @@ import {
   isIgnoredByGit,
   isRuntimeAvailable,
   runCommand,
+  shouldKeepGeneratedTrees,
 } from './generate-project.js'
 
 /**
@@ -58,11 +59,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Kept when KEEP_GENERATED_TREES is set, so a failure can be inspected rather than re-reproduced.
-  if (process.env.KEEP_GENERATED_TREES === undefined) {
-    await rm(workspaceDirectory, { recursive: true, force: true })
-  } else {
+  if (shouldKeepGeneratedTrees) {
     process.stdout.write(`\nGenerated trees kept at ${workspaceDirectory}\n`)
+    return
   }
+  await rm(workspaceDirectory, { recursive: true, force: true })
 })
 
 describe.each(COMBINATIONS)('$label', (combination) => {
@@ -94,19 +95,26 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     // Initialised BEFORE install so `prepare` can wire core.hooksPath. Without a git tree `prepare`
     // prints "fatal: not in a git directory" and passes anyway (by design, `|| true`), which means an
     // un-inited tree silently skips the very thing that step exists to do.
+    // Setup failures THROW rather than assert, for the same reason as in packaging.test.ts: a git or
+    // install failure means the tests below never ran, which is a different thing from any of them
+    // being false.
     const gitInit = runCommand({
       command: 'git',
       commandArguments: ['init', '--quiet', '.'],
       workingDirectory: projectDirectory,
     })
-    expect(gitInit.succeeded, gitInit.output).toBe(true)
+    if (!gitInit.succeeded) {
+      throw new Error(`git init failed in ${projectDirectory}:\n${gitInit.output}`)
+    }
 
     const install = runCommand({
       command: packageManager,
       commandArguments: ['install'],
       workingDirectory: projectDirectory,
     })
-    expect(install.succeeded, install.output).toBe(true)
+    if (!install.succeeded) {
+      throw new Error(`${packageManager} install failed in ${projectDirectory}:\n${install.output}`)
+    }
   })
 
   it.skipIf(!runtimeAvailable)('passes its own gate', () => {
@@ -236,11 +244,11 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     },
   )
 
-  it.skipIf(!runtimeAvailable)('ships an executable pre-commit hook wired via core.hooksPath', () => {
+  it.skipIf(!runtimeAvailable)('ships an executable pre-commit hook wired via core.hooksPath', async () => {
     // The executable bit is load-bearing and silently lost by any copy that does not preserve modes:
     // git simply declines to run a non-executable hook, so the pre-commit gate goes quietly absent.
     const hookPath = path.join(projectDirectory, '.githooks', 'pre-commit')
-    expect(access(hookPath, constants.X_OK)).resolves.toBeUndefined()
+    await expect(access(hookPath, constants.X_OK)).resolves.toBeUndefined()
 
     const hooksPath = runCommand({
       command: 'git',
@@ -287,12 +295,12 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     },
   )
 
-  it.skipIf(!runtimeAvailable)('preserves GitHub Actions expressions verbatim', () => {
+  it.skipIf(!runtimeAvailable)('preserves GitHub Actions expressions verbatim', async () => {
     // The single most important assertion about the copy channel. If `source/` were ever rendered,
     // `{{ github.ref }}` would resolve against the answers, find nothing, and leave a bare `$`.
     const workflowPath = path.join(projectDirectory, '.github', 'workflows', 'ci.yml')
 
-    expect(readFile(workflowPath, 'utf8')).resolves.toContain('${{ github.ref }}')
+    await expect(readFile(workflowPath, 'utf8')).resolves.toContain('${{ github.ref }}')
   })
 
   it.skipIf(!runtimeAvailable)('ships a document for every selected module, plus an index', async () => {
@@ -322,10 +330,13 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     for (const projectModule of unselectedModules) {
       const documentPath = path.join(projectDirectory, projectModule.documentation.path)
 
+      // ENOENT specifically, not any error. A bare `toThrow()` would also pass if `access` rejected for
+      // an unrelated reason (EACCES, ENOTDIR), reporting "correctly absent" for a file that is present
+      // but unreadable.
       await expect(
         access(documentPath),
         `${projectModule.name} is not selected but its document was copied`,
-      ).rejects.toThrow()
+      ).rejects.toThrow(/ENOENT/)
     }
   })
 
