@@ -107,6 +107,60 @@ export function isBunRuntime(packageManager: PackageManager): boolean {
 }
 
 /**
+ * The layouts a generated project can have.
+ *
+ * `single` puts the package's source at the project root — `src/**` beside `package.json`. `monorepo`
+ * puts it under `packages/<name>/`, with the root becoming a workspace root that holds no source of its
+ * own.
+ *
+ * NOT YET REACHABLE FROM THE PROMPT, deliberately. The plumbing that resolves the package root and
+ * writes the `workspaces` field lands before the per-module changes that make a generated workspace
+ * actually build — its tsconfig `paths` and test-discovery globs still assume `single`. Offering an
+ * option that produces a subtly broken project is worse than not offering it, so `toProjectAnswers`
+ * forces `single` until those land. The `monorepo` path is exercised by tests, which supply the answer
+ * directly, and that is what keeps this plumbing honest rather than merely unused.
+ */
+export const PROJECT_STRUCTURES = ['single', 'monorepo'] as const
+export type ProjectStructure = (typeof PROJECT_STRUCTURES)[number]
+
+/** The layout every generated project uses today — see `PROJECT_STRUCTURES`. */
+export const DEFAULT_PROJECT_STRUCTURE: ProjectStructure = 'single'
+
+/**
+ * The package a generated monorepo starts with.
+ *
+ * `core` rather than the project's own name: a workspace whose first package is named after the repo
+ * invites `packages/my-app/` inside `my-app/`, and the second package then has no natural name. `core`
+ * says what the package IS — the thing the others depend on.
+ */
+export const DEFAULT_FIRST_PACKAGE_NAME = 'core'
+
+/**
+ * The workspace directory a monorepo's packages live under, and the glob that matches them.
+ *
+ * One constant rather than two literals because the directory name appears in three unrelated places —
+ * the `workspaces` glob, the package root path, and the test-discovery scope — and a disagreement
+ * between them fails in a way that names the glob rather than the mismatch.
+ */
+export const WORKSPACE_PACKAGES_DIRECTORY = 'packages'
+
+/**
+ * Where a package's own source lands, relative to the project root.
+ *
+ * Returns `.` for `single`, because the package root and the project root are the same directory there —
+ * which is what made the `packageSource/` copy channel a provable no-op when it was introduced.
+ */
+export function packageRootRelativePath(answers: {
+  readonly projectStructure: ProjectStructure
+  readonly firstPackageName: string
+}): string {
+  if (answers.projectStructure === 'single') {
+    return '.'
+  }
+  return `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}`
+}
+
+/**
  * The test runners a generated project can use.
  *
  * Only meaningful when the manager is `bun` — `bun test` ships with the Bun runtime and does not exist
@@ -148,6 +202,16 @@ export interface ProjectAnswers {
   readonly packageManager: PackageManager
   /** Always `vitest` unless `packageManager` is `bun`, since `bun test` ships with the Bun runtime. */
   readonly testRunner: TestRunner
+  /** Always `single` today — the prompt is deliberately not offered yet. See `PROJECT_STRUCTURES`. */
+  readonly projectStructure: ProjectStructure
+  /**
+   * The one package a generated monorepo starts with, e.g. `core`.
+   *
+   * Carried even under `single`, where it is unused, rather than made optional. An optional field would
+   * push a `?? 'core'` fallback into every consumer that builds a package path, and the consumer that
+   * forgot it would silently emit `packages/undefined/`.
+   */
+  readonly firstPackageName: string
   /** Values of the opt-in feature checkboxes, e.g. `['config']`. */
   readonly enableFeatures: readonly string[]
 }
@@ -374,8 +438,10 @@ export function mergePackageJsonFragments(
 export function renderPackageJson(options: {
   readonly projectName: string
   readonly merged: PackageJsonFragment
+  /** Omitted means `single`, which adds no `workspaces` field at all. */
+  readonly projectStructure?: ProjectStructure
 }): string {
-  const { projectName, merged } = options
+  const { projectName, merged, projectStructure = DEFAULT_PROJECT_STRUCTURE } = options
 
   const packageJson: Record<string, unknown> = {
     name: projectName,
@@ -385,6 +451,23 @@ export function renderPackageJson(options: {
     // publication the easy path.
     private: true,
     type: 'module',
+  }
+
+  /**
+   * `workspaces` is written HERE, not contributed by a module, for two reasons.
+   *
+   * The typed one: it is a string ARRAY, and every part of `mergePackageJsonFragments` — the merge loop,
+   * the conflict message, the provenance map, the key sort — is `Record<string, string>`. Adding an array
+   * section would break that invariant in four places to serve one field with one possible value.
+   *
+   * The conceptual one: "is this a workspace root" is structural IDENTITY, which this function already
+   * owns alongside `name`, `private` and `type` — and which the contract explicitly says is not a
+   * module's business. No module other than `monorepo` would ever add a workspace glob.
+   *
+   * Placed directly after the identity block so a reader sees WHAT the project is before how it builds.
+   */
+  if (projectStructure === 'monorepo') {
+    packageJson.workspaces = [`${WORKSPACE_PACKAGES_DIRECTORY}/*`]
   }
 
   for (const section of MERGEABLE_PACKAGE_JSON_SECTIONS) {

@@ -3,13 +3,18 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { NodePlopAPI } from 'plop'
 import {
+  DEFAULT_FIRST_PACKAGE_NAME,
+  DEFAULT_PROJECT_STRUCTURE,
   mergePackageJsonFragments,
   mergeTemplateData,
   MODULE_COPY_TREES,
+  packageRootRelativePath,
   type PackageJsonFragment,
   type ProjectAnswers,
   PACKAGE_MANAGERS,
   type PackageManager,
+  PROJECT_STRUCTURES,
+  type ProjectStructure,
   renderPackageJson,
   TEST_RUNNERS,
   type TestRunner,
@@ -103,6 +108,50 @@ function assertKnownTestRunner(rawTestRunner: unknown): TestRunner {
 }
 
 /**
+ * Rejects a project-structure answer that is unknown.
+ *
+ * Throws rather than falling back to `single`, even though `single` is the only reachable value today.
+ * A silent fallback is exactly how a future `projectStructure` prompt could be renamed and produce
+ * single-package projects forever while appearing to offer a choice — the same class of failure as the
+ * runtime prompt that was deleted during a refactor with all 87 generation assertions still passing.
+ */
+function assertKnownProjectStructure(rawStructure: unknown): ProjectStructure {
+  if (!PROJECT_STRUCTURES.some((knownStructure) => knownStructure === rawStructure)) {
+    throw new Error(
+      `projectStructure must be one of ${PROJECT_STRUCTURES.join(', ')} but was ` +
+        `${JSON.stringify(rawStructure)}. This decides whether the package's source lands at the ` +
+        'project root or under packages/<name>/, so a wrong value misplaces every source file.',
+    )
+  }
+  return rawStructure as ProjectStructure
+}
+
+/**
+ * Normalizes the first package's name, falling back to the default when absent.
+ *
+ * Unlike the guards above this does NOT throw on a missing value, because there is no prompt to produce
+ * one yet and the field is meaningless under `single`. It does reject a value that would build a broken
+ * path: a package name is one directory segment, and letting `packages/../..` through `path.join` is how
+ * a generator writes outside its own destination.
+ */
+function normalizeFirstPackageName(rawPackageName: unknown): string {
+  if (rawPackageName === undefined || rawPackageName === null) {
+    return DEFAULT_FIRST_PACKAGE_NAME
+  }
+  const packageName = String(rawPackageName).trim()
+  if (packageName.length === 0) {
+    return DEFAULT_FIRST_PACKAGE_NAME
+  }
+  if (packageName.includes('/') || packageName.includes('\\') || packageName.startsWith('.')) {
+    throw new Error(
+      `firstPackageName must be a single directory name but was ${JSON.stringify(packageName)}. ` +
+        'Separators and dot-names would place the package outside packages/.',
+    )
+  }
+  return packageName
+}
+
+/**
  * Narrows plop's untyped answers object to the typed shape the modules consume.
  *
  * Plop hands `actions()` a plain `Record<string, unknown>`; every module then reads it as
@@ -122,6 +171,14 @@ function toProjectAnswers(rawAnswers: Record<string, unknown>): ProjectAnswers {
     // is skipped for them and the answer would be `undefined`. Normalizing here means no module has to
     // defend against that combination.
     testRunner: packageManager === 'bun' ? assertKnownTestRunner(rawAnswers.testRunner) : 'vitest',
+    // FORCED to `single`, not read from the answers, because no prompt offers the choice yet — the
+    // per-module template changes that make a generated workspace build are not in place. A caller that
+    // supplies `monorepo` directly (the tests do) gets it honoured; an operator cannot reach it.
+    // Remove the `?? DEFAULT_PROJECT_STRUCTURE` and add the prompt in the same change, never separately.
+    projectStructure: assertKnownProjectStructure(
+      rawAnswers.projectStructure ?? DEFAULT_PROJECT_STRUCTURE,
+    ),
+    firstPackageName: normalizeFirstPackageName(rawAnswers.firstPackageName),
     enableFeatures: Array.isArray(rawAnswers.enableFeatures)
       ? (rawAnswers.enableFeatures as string[])
       : [],
@@ -213,15 +270,23 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
    * first, which is a needless rendering pass over generated content.
    */
   plop.setActionType(WRITE_PACKAGE_JSON, async (_answers, config) => {
-    const { projectName, fragments, destinationDirectory } = config as unknown as {
-      projectName: string
-      fragments: ReadonlyArray<{ moduleName: string; fragment: PackageJsonFragment }>
-      destinationDirectory: string
-    }
+    const { projectName, fragments, destinationDirectory, projectStructure } =
+      config as unknown as {
+        projectName: string
+        fragments: ReadonlyArray<{ moduleName: string; fragment: PackageJsonFragment }>
+        destinationDirectory: string
+        projectStructure: ProjectStructure
+      }
     const merged = mergePackageJsonFragments(fragments)
     const packageJsonPath = path.join(destinationDirectory, 'package.json')
     await fs.mkdir(destinationDirectory, { recursive: true })
-    await fs.writeFile(packageJsonPath, renderPackageJson({ projectName, merged }), 'utf8')
+    await fs.writeFile(
+      packageJsonPath,
+      // `projectStructure` decides only whether a `workspaces` field is written — see
+      // `renderPackageJson`, which owns that field rather than any module.
+      renderPackageJson({ projectName, merged, projectStructure }),
+      'utf8',
+    )
     return `wrote package.json (${Object.keys(merged.scripts ?? {}).length} scripts)`
   })
 
@@ -322,17 +387,19 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
       }
 
       /**
-       * Where a package's own source lands.
+       * Where each copy tree's contents land.
        *
-       * IDENTICAL to the project root today, because the single-package layout is the only one offered —
-       * so every `packageSource/` copy is currently indistinguishable from a `source/` copy, and
-       * `examples:check` proves generated output unchanged. A workspace layout would point this at
-       * `packages/<name>/` and the split would start doing visible work. Named and resolved separately
-       * now so that later change has exactly one place to happen.
+       * Under `single` the two are the SAME directory, which is what makes the `packageSource/` split a
+       * provable no-op there — `examples:check` shows zero drift. Under `monorepo` the package root
+       * becomes `packages/<name>/`, and the split starts doing visible work: config's `src/config/**`
+       * moves while its TOMLs and docs stay at the repository root.
+       *
+       * `packageRootRelativePath` returns `.` for `single`, so `path.join` collapses it back to the
+       * destination directory rather than appending anything.
        */
       const copyDestinations: Readonly<Record<string, string>> = {
         projectRoot: destinationDirectory,
-        packageRoot: destinationDirectory,
+        packageRoot: path.join(destinationDirectory, packageRootRelativePath(answers)),
       }
 
       return [
@@ -352,6 +419,7 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         {
           type: WRITE_PACKAGE_JSON,
           projectName: answers.projectName,
+          projectStructure: answers.projectStructure,
           destinationDirectory,
           fragments: selectedModules.map((projectModule) => ({
             moduleName: projectModule.name,

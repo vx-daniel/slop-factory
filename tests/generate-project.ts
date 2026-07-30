@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import nodePlop from 'node-plop'
 import { resolvePlopfilePath } from '../plopfile-path.js'
-import type { PackageManager, TestRunner } from '../modules/module-contract.js'
+import type { PackageManager, ProjectStructure, TestRunner } from '../modules/module-contract.js'
 
 /**
  * Resolved at MODULE LOAD, not per call — so importing this helper throws if the factory has not been
@@ -18,6 +18,17 @@ export interface GenerationRequest {
   readonly workspaceDirectory: string
   readonly packageManager: PackageManager
   readonly testRunner: TestRunner
+  /**
+   * Defaults to `single`, matching what the prompts can produce.
+   *
+   * Supplying `monorepo` here is currently the ONLY way to reach that layout — `toProjectAnswers` forces
+   * `single` for anything coming from a prompt, because the per-module template changes that make a
+   * generated workspace build are not in place yet. So this parameter is what keeps the package-root
+   * plumbing exercised rather than merely written.
+   */
+  readonly projectStructure?: ProjectStructure
+  /** Defaults to `core`. Only meaningful under `monorepo`. */
+  readonly firstPackageName?: string
   readonly enableFeatures: readonly string[]
 }
 
@@ -43,6 +54,14 @@ export async function generateProject(request: GenerationRequest): Promise<strin
     projectPath: request.workspaceDirectory,
     packageManager: request.packageManager,
     testRunner: request.testRunner,
+    // Passed through only when supplied, so an unset value takes the same path a prompt-driven run does
+    // rather than a test-only one. `toProjectAnswers` applies the defaults.
+    ...(request.projectStructure === undefined
+      ? {}
+      : { projectStructure: request.projectStructure }),
+    ...(request.firstPackageName === undefined
+      ? {}
+      : { firstPackageName: request.firstPackageName }),
     enableFeatures: [...request.enableFeatures],
   })
 

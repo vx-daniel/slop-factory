@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_FIRST_PACKAGE_NAME, type ProjectAnswers } from './module-contract.js'
 import { PROJECT_MODULES } from './registry.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -29,6 +30,26 @@ const REACHABLE_ANSWERS = [
   { packageManager: 'bun', testRunner: 'bun-test', enableFeatures: ['config'] },
 ] as const
 
+/**
+ * Fills in the answer fields these assertions deliberately do not vary.
+ *
+ * `projectStructure` is `single` because that is the only value the prompts can produce — see
+ * `PROJECT_STRUCTURES`. The monorepo layout is a separate axis and is exercised where it is observable,
+ * in the generation tests, which supply the answer directly.
+ *
+ * Extracted rather than spread inline at each call site, because there were seven of them and adding a
+ * field to `ProjectAnswers` had to be a one-line change here rather than seven identical edits.
+ */
+function toFullAnswers(answers: (typeof REACHABLE_ANSWERS)[number]): ProjectAnswers {
+  return {
+    projectName: 'example',
+    projectPath: '/tmp',
+    projectStructure: 'single',
+    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+    ...answers,
+  }
+}
+
 describe('module registry', () => {
   it('registers at least the always-on modules', () => {
     const names = PROJECT_MODULES.map((projectModule) => projectModule.name)
@@ -51,7 +72,7 @@ describe('module registry', () => {
     for (const answers of REACHABLE_ANSWERS) {
       const selectedManagerModules = PROJECT_MODULES.filter(
         (projectModule) =>
-          projectModule.isSelected({ projectName: 'example', projectPath: '/tmp', ...answers }) &&
+          projectModule.isSelected(toFullAnswers(answers)) &&
           MANAGER_MODULES.some((moduleName) => moduleName === projectModule.name),
       )
 
@@ -67,7 +88,7 @@ describe('module registry', () => {
     for (const answers of REACHABLE_ANSWERS) {
       const selectedTestRunnerModules = PROJECT_MODULES.filter(
         (projectModule) =>
-          projectModule.isSelected({ projectName: 'example', projectPath: '/tmp', ...answers }) &&
+          projectModule.isSelected(toFullAnswers(answers)) &&
           TEST_RUNNER_MODULES.some((moduleName) => moduleName === projectModule.name),
       )
 
@@ -83,7 +104,7 @@ describe('module registry', () => {
     const { mergePackageJsonFragments } = await import('./module-contract.js')
 
     for (const answers of REACHABLE_ANSWERS) {
-      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const fullAnswers = toFullAnswers(answers)
       const merged = mergePackageJsonFragments(
         PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
           (projectModule) => ({
@@ -106,7 +127,7 @@ describe('module registry', () => {
     const { mergePackageJsonFragments } = await import('./module-contract.js')
 
     for (const answers of REACHABLE_ANSWERS) {
-      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const fullAnswers = toFullAnswers(answers)
       const fragments = PROJECT_MODULES.filter((projectModule) =>
         projectModule.isSelected(fullAnswers),
       ).map((projectModule) => ({
@@ -125,9 +146,7 @@ describe('module rendered templates', () => {
     // a module claiming a template the generator cannot find fails at generation time, for the operator.
     for (const projectModule of PROJECT_MODULES) {
       for (const answers of REACHABLE_ANSWERS) {
-        const templates =
-          projectModule.renderedTemplates?.({ projectName: 'example', projectPath: '/tmp', ...answers }) ??
-          []
+        const templates = projectModule.renderedTemplates?.(toFullAnswers(answers)) ?? []
         for (const template of templates) {
           await expect(
             access(path.join(FACTORY_ROOT, template.templateFile)),
@@ -142,7 +161,7 @@ describe('module rendered templates', () => {
     // A collision means one module silently overwrites the other's rendered file, with the winner
     // decided by registry order.
     for (const answers of REACHABLE_ANSWERS) {
-      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const fullAnswers = toFullAnswers(answers)
       const outputPaths = PROJECT_MODULES.filter((projectModule) =>
         projectModule.isSelected(fullAnswers),
       ).flatMap((projectModule) =>
@@ -159,7 +178,7 @@ describe('module rendered templates', () => {
     const { mergeTemplateData } = await import('./module-contract.js')
 
     for (const answers of REACHABLE_ANSWERS) {
-      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const fullAnswers = toFullAnswers(answers)
       const contributions = PROJECT_MODULES.filter((projectModule) =>
         projectModule.isSelected(fullAnswers),
       ).map((projectModule) => ({
@@ -189,7 +208,7 @@ describe('module rendered templates', () => {
     ]
 
     for (const answers of REACHABLE_ANSWERS) {
-      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const fullAnswers = toFullAnswers(answers)
       const merged = mergeTemplateData(
         PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
           (projectModule) => ({

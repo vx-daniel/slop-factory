@@ -59,6 +59,15 @@ export default defineConfig({
       },
       {
         test: {
+          // Where the generator PLACES files, proved by generating into a temp directory and reading
+          // the tree. Needs the built plopfile, like `prompts`, but installs nothing — so it stays
+          // seconds rather than minutes and can assert layouts the generation suite cannot afford to.
+          name: 'layout',
+          include: ['tests/layout.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'generation',
           include: ['tests/generation.test.ts'],
           testTimeout: GENERATION_TIMEOUT_MS,
