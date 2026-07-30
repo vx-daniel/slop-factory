@@ -252,6 +252,8 @@ and one place to change it. The summaries below are pointers, not the record.
 | [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | No `repository` field — npm needs it for provenance; blocks the first `npm publish` |
 | [#5](https://github.com/vx-daniel/slop-factory/issues/5) | `bun test` coverage is blind to untested files | An untested `src/` file is absent from the report while the total reads 100% |
 | [#7](https://github.com/vx-daniel/slop-factory/issues/7) | Deprecated `actions/checkout@v4` / `setup-node@v4` pins | Generated projects emit a Node 20 deprecation annotation on their first CI run |
+| [#15](https://github.com/vx-daniel/slop-factory/issues/15) | Generated pre-commit hook hardcodes `npm` | A Bun project's hook runs `npm run check:all` while its CI runs `bun run check:all` |
+| [#10](https://github.com/vx-daniel/slop-factory/issues/10) | Only npm and bun are offered | pnpm and yarn are unsupported by the generator, though the generated gate already detects all four |
 
 Two of these are worth understanding before choosing options at the prompt:
 
