@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { NodePlopAPI } from 'plop'
 import {
   mergePackageJsonFragments,
+  mergeTemplateData,
   type PackageJsonFragment,
   type ProjectAnswers,
   PROJECT_RUNTIMES,
@@ -282,29 +283,19 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         projectModule.isSelected(answers),
       )
 
-      const isBunRuntime = answers.projectRuntime === 'bun'
-
       /**
-       * The values the rendered documentation templates read. Built once and shared by every `add`
-       * action below — three copies of this object was the first duplication the factory grew, and
-       * each copy is a chance for one document to describe a different project than its neighbour.
+       * The data every rendered template sees.
+       *
+       * Almost all of it is CONTRIBUTED BY MODULES — `usesVitest` by the runner modules, the
+       * package-manager commands by the runtime modules, `hasConfigModule` by config. This function
+       * used to assemble those centrally, which meant the generator branched on the runtime and on
+       * which modules were present, duplicating knowledge that already had an owner.
+       *
+       * Only two keys are genuinely the generator's, because neither belongs to any single module:
+       * the project's name, and the docs index rows, which describe the SET of selected modules.
        */
       const templateData = {
         projectName: answers.projectName,
-        isBunRuntime,
-        /** Drives the coverage sections: `bun test` ships no COVERAGE.md pipeline. */
-        usesVitest: answers.testRunner === 'vitest',
-        /**
-         * Whether `coverage-main.yml` ships. It is both Vitest-specific and npm-specific, and Node
-         * always implies Vitest, so it lives in the node module — which makes the runtime, not the
-         * runner, the condition. Bun projects refresh COVERAGE.md locally instead.
-         */
-        hasCoverageWorkflow: answers.projectRuntime === 'node',
-        hasConfigModule: selectedModules.some((projectModule) => projectModule.name === 'config'),
-        /** Prefix for running a package.json script, e.g. "npm run check:all". */
-        runCommand: isBunRuntime ? 'bun run' : 'npm run',
-        /** Command that installs dependencies. */
-        installCommand: isBunRuntime ? 'bun install' : 'npm install',
         /**
          * Rows for the generated `docs/README.md` index — one per selected module.
          *
@@ -316,6 +307,14 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
           summary: projectModule.documentation.summary,
           fileName: path.basename(projectModule.documentation.path),
         })),
+        ...mergeTemplateData(
+          selectedModules
+            .filter((projectModule) => projectModule.templateData !== undefined)
+            .map((projectModule) => ({
+              moduleName: projectModule.name,
+              data: projectModule.templateData?.(answers) ?? {},
+            })),
+        ),
       }
 
       return [
@@ -337,45 +336,20 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
           })),
         },
 
-        // The rendered templates. These DO go through Handlebars, which is why they live outside any
-        // module's `source/` tree — the two channels stay physically separate so a file cannot be
-        // rendered by accident. `path` is absolute, which plop resolves as-is; `templateFile` is
-        // relative to this plopfile.
-        {
-          type: 'add',
-          path: path.join(destinationDirectory, '.gitignore'),
-          templateFile: 'modules/base/gitignore.hbs',
-          data: templateData,
-        },
-        // tsconfig is rendered because two of its fields depend on the test runner: `types` needs
-        // `bun` under `bun test`, and `include` must not name a vitest.config.ts that is not there.
-        {
-          type: 'add',
-          path: path.join(destinationDirectory, 'tsconfig.json'),
-          templateFile: 'modules/base/tsconfig.json.hbs',
-          data: templateData,
-        },
-        {
-          type: 'add',
-          path: path.join(destinationDirectory, 'CLAUDE.md'),
-          templateFile: 'modules/base/CLAUDE.md.hbs',
-          data: templateData,
-        },
-        {
-          type: 'add',
-          path: path.join(destinationDirectory, 'README.md'),
-          templateFile: 'modules/base/README.md.hbs',
-          data: templateData,
-        },
-        // The docs index. Each module's own document arrives verbatim via its `source/docs/` tree;
-        // only this index needs rendering, because it is the one file whose content depends on WHICH
-        // modules were selected.
-        {
-          type: 'add',
-          path: path.join(destinationDirectory, 'docs', 'README.md'),
-          templateFile: 'modules/base/docs-index.md.hbs',
-          data: templateData,
-        },
+        // Every module's rendered templates, declared by the module rather than listed here. These DO
+        // go through Handlebars, which is why they live outside any module's `source/` tree — the two
+        // channels stay physically separate so a file cannot be rendered by accident.
+        //
+        // `path` is absolute, which plop resolves as-is; it is ALSO rendered, so a module may emit into
+        // a directory named after an answer. `templateFile` is relative to this plopfile.
+        ...selectedModules.flatMap((projectModule) =>
+          (projectModule.renderedTemplates?.(answers) ?? []).map((template) => ({
+            type: 'add',
+            path: path.join(destinationDirectory, template.outputPath),
+            templateFile: template.templateFile,
+            data: templateData,
+          })),
+        ),
       ]
     },
   })

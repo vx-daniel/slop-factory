@@ -31,6 +31,23 @@ export const nodeModule: ProjectModule = {
     return answers.projectRuntime === 'node'
   },
 
+  /**
+   * The package-manager vocabulary the generated documentation uses, plus the fact that this runtime is
+   * the one whose CI workflow can refresh COVERAGE.md.
+   *
+   * `hasCoverageWorkflow` lives here rather than in the `vitest` module because `coverage-main.yml` is
+   * BOTH Vitest-specific and npm-specific, and node always implies Vitest — so the runtime is the
+   * condition that holds unconditionally.
+   */
+  templateData(): Readonly<Record<string, unknown>> {
+    return {
+      isBunRuntime: false,
+      runCommand: 'npm run',
+      installCommand: 'npm install',
+      hasCoverageWorkflow: true,
+    }
+  },
+
   packageJsonFragment(): PackageJsonFragment {
     return {
       engines: { node: NODE_ENGINE_RANGE },

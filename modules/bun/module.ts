@@ -37,6 +37,19 @@ export const bunModule: ProjectModule = {
     return answers.projectRuntime === 'bun'
   },
 
+  /**
+   * Deliberately does NOT contribute `hasCoverageWorkflow`. A missing key is falsy in Handlebars, which
+   * is the correct answer: `coverage-main.yml` is npm-specific and ships from the node module, so a Bun
+   * project refreshes COVERAGE.md locally instead.
+   */
+  templateData(): Readonly<Record<string, unknown>> {
+    return {
+      isBunRuntime: true,
+      runCommand: 'bun run',
+      installCommand: 'bun install',
+    }
+  },
+
   packageJsonFragment(): PackageJsonFragment {
     return {
       engines: { bun: BUN_ENGINE_RANGE },

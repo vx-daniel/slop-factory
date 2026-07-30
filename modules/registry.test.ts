@@ -117,6 +117,85 @@ describe('module registry', () => {
   })
 })
 
+describe('module rendered templates', () => {
+  it('has every declared template file actually present on disk', async () => {
+    // Same reasoning as the documentation check below: a declaration and a file are separate things, and
+    // a module claiming a template the generator cannot find fails at generation time, for the operator.
+    for (const projectModule of PROJECT_MODULES) {
+      for (const answers of REACHABLE_ANSWERS) {
+        const templates =
+          projectModule.renderedTemplates?.({ projectName: 'example', projectPath: '/tmp', ...answers }) ??
+          []
+        for (const template of templates) {
+          await expect(
+            access(path.join(FACTORY_ROOT, template.templateFile)),
+            `${projectModule.name} declares ${template.templateFile} but the file is missing`,
+          ).resolves.toBeUndefined()
+        }
+      }
+    }
+  })
+
+  it('never has two modules writing the same output path', async () => {
+    // A collision means one module silently overwrites the other's rendered file, with the winner
+    // decided by registry order.
+    for (const answers of REACHABLE_ANSWERS) {
+      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const outputPaths = PROJECT_MODULES.filter((projectModule) =>
+        projectModule.isSelected(fullAnswers),
+      ).flatMap((projectModule) =>
+        (projectModule.renderedTemplates?.(fullAnswers) ?? []).map((template) => template.outputPath),
+      )
+
+      expect(new Set(outputPaths).size, `${answers.projectRuntime}/${answers.testRunner}`).toBe(
+        outputPaths.length,
+      )
+    }
+  })
+
+  it('merges template data for every reachable answer set without a conflict', async () => {
+    const { mergeTemplateData } = await import('./module-contract.js')
+
+    for (const answers of REACHABLE_ANSWERS) {
+      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const contributions = PROJECT_MODULES.filter((projectModule) =>
+        projectModule.isSelected(fullAnswers),
+      ).map((projectModule) => ({
+        moduleName: projectModule.name,
+        data: projectModule.templateData?.(fullAnswers) ?? {},
+      }))
+
+      expect(() => mergeTemplateData(contributions)).not.toThrow()
+    }
+  })
+
+  it('supplies every flag the templates branch on', async () => {
+    // The failure this prevents is quiet: a missing flag is falsy in Handlebars, so a template silently
+    // renders its `{{else}}` branch instead of erroring. Dropping `usesVitest` would make every project
+    // document itself as a bun-test project.
+    const { mergeTemplateData } = await import('./module-contract.js')
+    const REQUIRED_FLAGS = ['isBunRuntime', 'runCommand', 'installCommand', 'usesVitest']
+
+    for (const answers of REACHABLE_ANSWERS) {
+      const fullAnswers = { projectName: 'example', projectPath: '/tmp', ...answers }
+      const merged = mergeTemplateData(
+        PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
+          (projectModule) => ({
+            moduleName: projectModule.name,
+            data: projectModule.templateData?.(fullAnswers) ?? {},
+          }),
+        ),
+      )
+
+      for (const flag of REQUIRED_FLAGS) {
+        expect(flag in merged, `${flag} unset for ${answers.projectRuntime}/${answers.testRunner}`).toBe(
+          true,
+        )
+      }
+    }
+  })
+})
+
 describe('module documentation', () => {
   it('requires every module to declare a document under docs/', () => {
     for (const projectModule of PROJECT_MODULES) {
