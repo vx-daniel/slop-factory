@@ -132,10 +132,10 @@ function validateFirstPackageName(rawName: string): true | string {
 /**
  * Rejects a project-structure answer that is unknown.
  *
- * Throws rather than falling back to `single`, even though `single` is the only reachable value today.
- * A silent fallback is exactly how a future `projectStructure` prompt could be renamed and produce
- * single-package projects forever while appearing to offer a choice — the same class of failure as the
- * runtime prompt that was deleted during a refactor with all 87 generation assertions still passing.
+ * Throws rather than falling back to `single`. A silent fallback is exactly how a rename of the
+ * `projectStructure` prompt would produce single-package projects forever while still appearing to offer
+ * the choice — the same class of failure as the runtime prompt that was deleted during a refactor with
+ * all 87 generation assertions still passing.
  */
 function assertKnownProjectStructure(rawStructure: unknown): ProjectStructure {
   if (!PROJECT_STRUCTURES.some((knownStructure) => knownStructure === rawStructure)) {
@@ -151,10 +151,10 @@ function assertKnownProjectStructure(rawStructure: unknown): ProjectStructure {
 /**
  * Normalizes the first package's name, falling back to the default when absent.
  *
- * Unlike the guards above this does NOT throw on a missing value, because there is no prompt to produce
- * one yet and the field is meaningless under `single`. It does reject a value that would build a broken
- * path: a package name is one directory segment, and letting `packages/../..` through `path.join` is how
- * a generator writes outside its own destination.
+ * Unlike the guards above this does NOT throw on a missing value: the prompt that produces it is asked
+ * only for a monorepo, so under `single` there is legitimately no answer and the field is meaningless. It
+ * does reject a value that would build a broken path: a package name is one directory segment, and letting
+ * `packages/../..` through `path.join` is how a generator writes outside its own destination.
  */
 function normalizeFirstPackageName(rawPackageName: unknown): string {
   if (rawPackageName === undefined || rawPackageName === null) {

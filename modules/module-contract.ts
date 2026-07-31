@@ -113,17 +113,18 @@ export function isBunRuntime(packageManager: PackageManager): boolean {
  * puts it under `packages/<name>/`, with the root becoming a workspace root that holds no source of its
  * own.
  *
- * NOT YET REACHABLE FROM THE PROMPT, deliberately. The plumbing that resolves the package root and
- * writes the `workspaces` field lands before the per-module changes that make a generated workspace
- * actually build — its tsconfig `paths` and test-discovery globs still assume `single`. Offering an
- * option that produces a subtly broken project is worse than not offering it, so `toProjectAnswers`
- * forces `single` until those land. The `monorepo` path is exercised by tests, which supply the answer
- * directly, and that is what keeps this plumbing honest rather than merely unused.
+ * BOTH ARE OFFERED BY THE PROMPT. `monorepo` was deliberately withheld for a while: the plumbing that
+ * resolves the package root and writes the `workspaces` field landed before the per-module changes that
+ * make a generated workspace actually build, and until those arrived a workspace's tsconfig `paths` and
+ * test-discovery globs still assumed `single`. Offering an option that produces a subtly broken project
+ * is worse than not offering it. Those changes have landed, so the choice is real and verified: for file
+ * placement by `tests/layout.test.ts`, which covers every layout without installing, and for behaviour by
+ * the workspace rows `tests/generation.test.ts` installs and gates.
  */
 export const PROJECT_STRUCTURES = ['single', 'monorepo'] as const
 export type ProjectStructure = (typeof PROJECT_STRUCTURES)[number]
 
-/** The layout every generated project uses today — see `PROJECT_STRUCTURES`. */
+/** The layout used when no answer is given — the prompt's default, and the fallback in `toProjectAnswers`. */
 export const DEFAULT_PROJECT_STRUCTURE: ProjectStructure = 'single'
 
 /**
@@ -238,7 +239,7 @@ export interface ProjectAnswers {
   readonly packageManager: PackageManager
   /** Always `vitest` unless `packageManager` is `bun`, since `bun test` ships with the Bun runtime. */
   readonly testRunner: TestRunner
-  /** Always `single` today — the prompt is deliberately not offered yet. See `PROJECT_STRUCTURES`. */
+  /** Which layout to generate. Decides where package source lands — see `packageRootRelativePath`. */
   readonly projectStructure: ProjectStructure
   /**
    * The one package a generated monorepo starts with, e.g. `core`.
