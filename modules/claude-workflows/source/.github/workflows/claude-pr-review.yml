@@ -7,6 +7,17 @@ name: Claude PR Review
 # summary and stops — see "Check for the Claude token" below. A fresh clone therefore stays green rather than
 # showing a red X on its first pull request.
 #
+# A CHANGE TO THIS FILE CANNOT BE REVIEWED BY ITS OWN PULL REQUEST. `claude-code-action` refuses to run when
+# this workflow's content differs from the copy on the default branch — a guard against a pull request
+# rewriting the reviewer to exfiltrate the token. Measured on PR #35: the step logged "Skipping action due to
+# workflow validation", posted no review, and still reported SUCCESS, so the check went GREEN while reviewing
+# nothing. That is the same false-green shape as the missing-token path above, and it is easy to misread as a
+# passing review.
+#
+# So an edit here is verified only AFTER merge, on the next pull request that touches something else. Do not
+# treat a green `Claude review` on a pull request that modifies this file as evidence the change works — and
+# when changing the prompt, expect to land it before you can see it run.
+#
 # PROJECT CONVENTIONS LOAD AUTOMATICALLY. The prompt reads `CLAUDE.md`, `.claude/rules/*.md` and
 # `.claude/memory/` from this repository, so the review enforces the conventions this project actually
 # documents rather than a generic checklist. Adding a rule file changes what the reviewer enforces, with no
@@ -81,6 +92,14 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Posts a progress comment the action updates as it works.
+          #
+          # A review has also arrived carrying a four-item task checklist inside the review body (PR #34,
+          # second pass, where the first pass on the same prompt carried none). This setting is the likelier
+          # source than the model narrating its own plan, but that is UNVERIFIED — and it cannot be verified
+          # from a pull request, for the reason in the header. Settle it by toggling this after a merge. Do
+          # not "fix" it by adding a prompt rule forbidding checklists: if the list comes from here, such a
+          # rule fights the setting instead of the cause, and the prompt is the copy that ships to adopters.
           track_progress: true
           prompt: |
             REPO: ${{ github.repository }}
@@ -138,7 +157,7 @@ jobs:
             {what's covered, what's missing — specific test matrix if gaps exist}
 
             ### Runtime Verification
-            Not performed — CI environment, no live server or DB access.
+            Not performed — this reviewer is read-only by design and cannot execute the project's gate.
             PR body claims: {one-line summary of the PR's verification claims, or "none stated"}.
 
             ### Risk Assessment
@@ -156,6 +175,12 @@ jobs:
               breaks under foreseeable evolution; soft nit = style beyond what rules enforce
             - **Ship it discipline:** "Ship it" ONLY when no work remains. If any blocker or
               unresolved load-bearing issue exists, use "Approve-with-nits" or "Needs work"
+            - **Runtime verification is OUT OF SCOPE, not blocked.** The tool grant below is read-only
+              on purpose — `Read`/`Grep`/`Glob` plus `gh pr view|diff|comment`, and nothing that runs the
+              project. Report it as the designed limit it is. Do NOT write that a sandbox blocked you, or
+              that a command needed approval: that reads as a broken environment and hides a deliberate
+              choice. It also follows that a verdict rests on reading PLUS the pull request's own stated
+              receipts, so weigh an unverified claim as a claim.
             - Do NOT comment outside the diff
             - Do NOT modify the PR branch
             - Do NOT spawn subagents (Task tool is not available)
