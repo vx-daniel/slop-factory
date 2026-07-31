@@ -104,6 +104,24 @@ function vitestProjectNamesRunByScript(scriptBody: string): readonly string[] {
   return projectNames
 }
 
+/**
+ * Which package.json scripts select each Vitest project, keyed by project name.
+ *
+ * Both assertions below need this same mapping — one to check a project has exactly one script, the other
+ * to check that script is reached by CI — so it is built once here rather than twice at the call sites.
+ */
+function scriptNamesByVitestProjectName(scripts: Record<string, string>): ReadonlyMap<string, readonly string[]> {
+  const scriptNamesByProjectName = new Map<string, string[]>()
+  for (const [scriptName, scriptBody] of Object.entries(scripts)) {
+    for (const projectName of vitestProjectNamesRunByScript(scriptBody)) {
+      const scriptNames = scriptNamesByProjectName.get(projectName) ?? []
+      scriptNames.push(scriptName)
+      scriptNamesByProjectName.set(projectName, scriptNames)
+    }
+  }
+  return scriptNamesByProjectName
+}
+
 /** The names of the scripts `.github/workflows/ci.yml` invokes directly, ignoring its comments. */
 function scriptNamesInvokedByWorkflow(workflowContents: string): readonly string[] {
   const scriptNames: string[] = []
@@ -154,15 +172,7 @@ function scriptNamesReachableFrom(
 
 describe('every Vitest project the factory declares', () => {
   it('is selected by exactly one package.json script', async () => {
-    const scripts = await readPackageJsonScripts()
-    const scriptNamesByProjectName = new Map<string, string[]>()
-    for (const [scriptName, scriptBody] of Object.entries(scripts)) {
-      for (const projectName of vitestProjectNamesRunByScript(scriptBody)) {
-        const scriptNames = scriptNamesByProjectName.get(projectName) ?? []
-        scriptNames.push(scriptName)
-        scriptNamesByProjectName.set(projectName, scriptNames)
-      }
-    }
+    const scriptNamesByProjectName = scriptNamesByVitestProjectName(await readPackageJsonScripts())
 
     for (const projectName of readVitestProjectNames()) {
       expect(
@@ -179,11 +189,10 @@ describe('every Vitest project the factory declares', () => {
       readFile(CI_WORKFLOW_PATH, 'utf8'),
     ])
     const scriptNamesRunInCi = scriptNamesReachableFrom(scriptNamesInvokedByWorkflow(workflowContents), scripts)
+    const scriptNamesByProjectName = scriptNamesByVitestProjectName(scripts)
 
     for (const projectName of readVitestProjectNames()) {
-      const scriptNamesRunningProject = Object.entries(scripts)
-        .filter(([, scriptBody]) => vitestProjectNamesRunByScript(scriptBody).includes(projectName))
-        .map(([scriptName]) => scriptName)
+      const scriptNamesRunningProject = scriptNamesByProjectName.get(projectName) ?? []
 
       expect(
         scriptNamesRunningProject.filter((scriptName) => scriptNamesRunInCi.has(scriptName)),

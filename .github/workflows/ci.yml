@@ -6,8 +6,9 @@
 # The steps mirror `prepublishOnly` and are ordered cheap-first, so a typecheck failure surfaces in
 # seconds rather than after several minutes of installs.
 #
-# Bun is installed because the combination matrix `tests/generation.test.ts` DERIVES from the contract
-# includes Bun rows. Without Bun on PATH those rows skip rather than fail — green, but partly unverified.
+# Bun is installed because the combination matrix that `tests/generation.test.ts` DERIVES from the
+# contract includes Bun rows. Without Bun on PATH those rows skip rather than fail — green, but partly
+# unverified.
 # No count is stated here on purpose: the matrix is derived precisely because hand-written counts drift.
 name: CI
 
