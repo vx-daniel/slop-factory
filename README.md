@@ -49,14 +49,20 @@ npm run lint              # oxlint on its own (lint:fix to autofix)
 npm run typecheck         # typechecks the factory
 npm test                  # fast unit tests: merge/render logic, registry invariants, source-tree guards
 npm run test:prompts      # reads the generator's prompt list and checks it against the contract
+npm run test:layout       # generates into a temp dir and checks WHERE files land — installs nothing
 npm run test:packaging    # builds + inspects the tarball npm publish would upload
 npm run examples:check    # fails if examples/ no longer matches the generator
 npm run examples:refresh  # rewrite examples/ from the current modules
-npm run verify            # slow: builds, then generates + installs + gates all 6 combinations
+npm run verify            # slow: generates + installs + gates 10 of the 16 combinations, printing the rest
 KEEP_GENERATED_TREES=1 npm run verify   # same, but leaves the trees on disk to inspect
 ```
 
 `.github/workflows/ci.yml` runs all of the above on every push and pull request.
+
+**Conventions for working on the factory live in [`.claude/rules/`](.claude/rules/).** These are distinct
+from the rules the factory *ships* (`modules/base/source/.claude/rules/`, which land in generated
+projects): they govern this repository's own code. Each states the failure mode it exists to block, so a
+future reader can tell when that failure mode has shifted and the rule should change.
 
 **The factory lints itself with oxlint, not the Biome it prescribes for generated projects.** That is a
 deliberate divergence with real gaps — most importantly the abbreviation/naming gate has no oxlint
