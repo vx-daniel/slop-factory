@@ -15,6 +15,7 @@ There are two of everything, for the same reason:
 | Docs | `docs/` | each module's `source/docs/` |
 | Pre-commit hook | `.githooks/pre-commit` | `modules/base/source/.githooks/pre-commit` |
 | PR review | `.github/workflows/claude-pr-review.yml` | `modules/claude-workflows/source/.github/workflows/...` |
+| Secret scan | `.github/workflows/secret-scan.yml` | `modules/base/source/.github/workflows/secret-scan.yml` |
 
 **Three of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
 it ships rather than a parallel version of it, it does:
@@ -22,11 +23,11 @@ it ships rather than a parallel version of it, it does:
 - **The linter EXTENDS the shipped config.** `biome.jsonc` extends `modules/gate/source/biome.json`, so the
   rules have exactly one copy and the factory is held to precisely the standard it prescribes. This is the
   strongest form of the pattern — where two files can be one plus a delta, they should be.
-- **The naming plugin and the PR review are byte-identical COPIES**, guarded by
+- **The naming plugin and both workflows are byte-identical COPIES**, guarded by
   `modules/payload-copies.test.ts`. Each is a copy for a specific reason the obvious approach cannot satisfy:
   `extends` resolves an inherited plugin path against the extending file, and GitHub only runs workflows from
   `.github/workflows/` at a repository root. The guard is what makes duplication acceptable — it cannot drift
-  silently.
+  silently, and the count is pinned so a fourth copy is a deliberate edit.
 - **The Biome version pin must match exactly** on both sides, asserted by `modules/gate/gate-config.test.ts`.
   A caret on the factory side is how it floats ahead and starts linting against rules its output never sees.
 

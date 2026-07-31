@@ -49,6 +49,11 @@ const PAYLOAD_COPIES: readonly PayloadCopy[] = [
     payloadPath: 'modules/claude-workflows/source/.github/workflows/claude-pr-review.yml',
     whyCopied: 'GitHub only runs workflows from .github/workflows/ at a repository root',
   },
+  {
+    factoryPath: '.github/workflows/secret-scan.yml',
+    payloadPath: 'modules/base/source/.github/workflows/secret-scan.yml',
+    whyCopied: 'GitHub only runs workflows from .github/workflows/ at a repository root',
+  },
 ]
 
 describe('files the factory copies from its own payload', () => {
@@ -70,6 +75,6 @@ describe('files the factory copies from its own payload', () => {
   it('covers every copy, so the list cannot quietly fall behind', () => {
     // A guard whose list is empty passes. This makes that state fail instead, and pins the count so adding a
     // third copy is a deliberate edit here rather than an omission nothing notices.
-    expect(PAYLOAD_COPIES.length, 'no payload copies declared — did the list get emptied?').toBe(2)
+    expect(PAYLOAD_COPIES.length, 'no payload copies declared — did the list get emptied?').toBe(3)
   })
 })
