@@ -165,10 +165,16 @@ Whichever you pick, add the output directory to `.gitignore` (`dist/` is pre-dec
   schema. Note the 85% floor is live: the first source file you add without a test fails
   `{{runCommand}} coverage`. That is intended.
 {{/if}}
-- [ ] **Delete the four Viaanix-specific workflows** if this repo is not in that org —
-  `claude-pr-review.yml`, `claude-issue-agent.yml`, `secret-scan.yml`, `test-audit.yml`. They
-  delegate to `Viaanix/vx-repo-tools` and cannot resolve elsewhere. `ci.yml`{{#if hasCoverageWorkflow}} and
-  `coverage-main.yml` are{{else}} is{{/if}} self-contained and stay{{#unless hasCoverageWorkflow}}s{{/unless}}.
+{{#if hasClaudeWorkflows}}
+- [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` repository secret** to switch on the three Claude workflows
+  (Settings → Secrets and variables → Actions). Until you do, each one skips with a note in its run
+  summary rather than failing — nothing is red, but nothing runs either. See
+  [docs/claude-workflows.md](docs/claude-workflows.md).
+{{/if}}
+- [ ] **Consider making `secret-scan` a required status check** (Settings → Rules → Rulesets). It needs no
+  secret and no setup, and it only scans a pull request's new commits — so requiring it will not fail open
+  work over anything already committed. Every workflow here is self-contained; nothing delegates to another
+  repository, so there is nothing to delete.
 {{#if usesVitest}}
 {{#if isMonorepo}}
 - [ ] **Leave `test.include` out of `vitest.config.ts`.** Discovery comes from `--dir packages` in the

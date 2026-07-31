@@ -143,10 +143,10 @@ Whichever you pick, add the output directory to `.gitignore` (`dist/` is pre-dec
 - [ ] **Replace the example config** and its tests (`packages/core/src/config/*.test.ts`) as you define your real
   schema. Note the 85% floor is live: the first source file you add without a test fails
   `npm run coverage`. That is intended.
-- [ ] **Delete the four Viaanix-specific workflows** if this repo is not in that org —
-  `claude-pr-review.yml`, `claude-issue-agent.yml`, `secret-scan.yml`, `test-audit.yml`. They
-  delegate to `Viaanix/vx-repo-tools` and cannot resolve elsewhere. `ci.yml` and
-  `coverage-main.yml` are self-contained and stay.
+- [ ] **Consider making `secret-scan` a required status check** (Settings → Rules → Rulesets). It needs no
+  secret and no setup, and it only scans a pull request's new commits — so requiring it will not fail open
+  work over anything already committed. Every workflow here is self-contained; nothing delegates to another
+  repository, so there is nothing to delete.
 - [ ] **Leave `test.include` out of `vitest.config.ts`.** Discovery comes from `--dir packages` in the
   `test` and `coverage` scripts, and the two do not compose — `test.include` resolves relative to `--dir`,
   so adding one produces `packages/packages/**` and matches nothing. See `docs/monorepo.md`.

@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { NodePlopAPI } from 'plop'
+import { CLAUDE_WORKFLOWS_FEATURE } from './modules/claude-workflows/module.js'
 import {
   DEFAULT_FIRST_PACKAGE_NAME,
   DEFAULT_PROJECT_STRUCTURE,
@@ -370,7 +371,16 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         type: 'checkbox',
         name: 'enableFeatures',
         message: 'Which optional features should be enabled?',
-        choices: [{ name: 'Layered TOML config (Zod-validated)', value: 'config', checked: true }],
+        choices: [
+          { name: 'Layered TOML config (Zod-validated)', value: 'config', checked: true },
+          {
+            // Unchecked by default: all three need a CLAUDE_CODE_OAUTH_TOKEN repository secret, and
+            // shipping ~700 lines of workflow that is inert without one is worse than not shipping it.
+            name: 'Claude workflows — PR review, issue triage, test audit (needs CLAUDE_CODE_OAUTH_TOKEN)',
+            value: CLAUDE_WORKFLOWS_FEATURE,
+            checked: false,
+          },
+        ],
       },
     ],
 
