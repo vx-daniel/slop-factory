@@ -31,12 +31,25 @@ says nothing about what the generator *produces*. A change to any module needs a
 a green run — including that `verify` **skips** combinations whose package manager is absent from `PATH`, so
 green does not mean every row ran.
 
+## Rules
+
+[`.claude/rules/`](.claude/rules/) — conventions for this repository, each stating the failure mode it
+exists to block so a future reader can tell when that mode has shifted.
+
+| Rule | Blocks |
+|---|---|
+| [generated-artifacts.md](.claude/rules/generated-artifacts.md) | Editing `examples/` or `dist/` instead of the generator that produces them |
+| [asserting-on-file-content.md](.claude/rules/asserting-on-file-content.md) | Assertions that match a file's prose rather than its data |
+
 ## The two rules most often broken here
 
 **Behaviour-preserving changes must prove it.** `examples:check` regenerates every committed example and
 compares content *and* executable bits, excluding nothing. If a refactor should not change generated
-output, zero drift is the receipt. If drift appears, read the diff before refreshing — every time it has
-been inspected it revealed either an intended comment change or a real bug.
+output, zero drift is the receipt.
+
+If drift appears, **read the diff before refreshing** — every time it has been inspected it revealed either
+an intended comment change or a real bug. And never fix a generated file by editing it: work up the chain to
+the module that produces it. See [generated-artifacts.md](.claude/rules/generated-artifacts.md).
 
 **A guard is not done until you have watched it fail.** Break the thing it guards, run it, see red, restore.
 Two guards in this repo were written, reviewed, and green while completely inert. See
