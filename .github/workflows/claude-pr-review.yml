@@ -138,7 +138,7 @@ jobs:
             {what's covered, what's missing — specific test matrix if gaps exist}
 
             ### Runtime Verification
-            Not performed — CI environment, no live server or DB access.
+            Not performed — this reviewer is read-only by design and cannot execute the project's gate.
             PR body claims: {one-line summary of the PR's verification claims, or "none stated"}.
 
             ### Risk Assessment
@@ -156,6 +156,14 @@ jobs:
               breaks under foreseeable evolution; soft nit = style beyond what rules enforce
             - **Ship it discipline:** "Ship it" ONLY when no work remains. If any blocker or
               unresolved load-bearing issue exists, use "Approve-with-nits" or "Needs work"
+            - **Runtime verification is OUT OF SCOPE, not blocked.** The tool grant below is read-only
+              on purpose — `Read`/`Grep`/`Glob` plus `gh pr view|diff|comment`, and nothing that runs the
+              project. Report it as the designed limit it is. Do NOT write that a sandbox blocked you, or
+              that a command needed approval: that reads as a broken environment and hides a deliberate
+              choice. It also follows that a verdict rests on reading PLUS the pull request's own stated
+              receipts, so weigh an unverified claim as a claim.
+            - **Post the review and nothing else.** No preamble, no task checklist, no narration of your
+              own process — the template above is the entire comment.
             - Do NOT comment outside the diff
             - Do NOT modify the PR branch
             - Do NOT spawn subagents (Task tool is not available)
