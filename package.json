@@ -42,7 +42,6 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
-    "plop": "plop",
     "prepublishOnly": "npm run check:all && npm run test:prompts && npm run test:layout && npm run test:packaging && npm run examples:check && npm run verify",
     "test": "vitest run --project unit",
     "test:layout": "npm run build && vitest run --project layout",
