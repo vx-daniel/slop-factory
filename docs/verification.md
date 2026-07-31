@@ -12,6 +12,19 @@ nobody runs either.
 | examples | `npm run examples:check` | ~2s | the committed `examples/` still match the generator |
 | generation | `npm run verify` | ~35s | generated projects install and pass their own gate |
 
+Two of them also run on **every commit**. `.githooks/pre-commit` — wired by `prepare`, the same way
+generated projects wire theirs — runs `check:all` and `examples:check`, about 3.3 seconds together. That
+second step is there because "changed a module, forgot to refresh the examples" is the most frequent mistake
+in this repository's history, and it is the one a human would otherwise push.
+
+`test:prompts`, `test:layout` and `verify` are deliberately **not** in the hook: the first two only fire on
+generator changes and each rebuilds, and the last takes minutes. All three run in CI.
+
+The linter is the Biome config the factory ships, reached by `extends` — see
+[`module-contract.md`](module-contract.md). A green `npm run lint` here therefore means what it means in a
+generated project: same rules, same naming plugin, same pinned version, with
+`modules/gate/gate-config.test.ts` asserting the last two cannot drift apart.
+
 `.github/workflows/ci.yml` runs all of them on every push and pull request.
 
 ## Why `prompts` is its own suite

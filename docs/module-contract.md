@@ -126,5 +126,5 @@ committed lockfile, the `setup-node` cache key — which is exactly what a manag
 ## Related
 
 - [`verification.md`](verification.md) — what proves a module change is correct
-- [`lint-parity.md`](lint-parity.md) — why the factory lints itself with oxlint, not the Biome it ships
+- [`verification.md`](verification.md) — the suites, and why the factory's linter extends the one it ships
 - [`.claude/rules/`](../.claude/rules/) — conventions for working on this repository

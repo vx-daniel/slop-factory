@@ -48,8 +48,8 @@ expect(packageJson.scripts.test).toContain('--dir packages')
 ```
 
 Comments cannot reach `packageJson.scripts`. Prefer this whenever the file is real JSON. It does not work
-for JSON-with-comments (`tsconfig.json`, `.oxlintrc.json`) without a tolerant parser, which is usually
-more machinery than the check is worth.
+for JSON-with-comments (`tsconfig.json`, `biome.jsonc`) without a tolerant parser, which is usually more
+machinery than the check is worth.
 
 **2. Filter to the lines that carry data,** then assert on those.
 
@@ -108,10 +108,15 @@ same assertion: `npm` is a substring of `pnpm`, so the check tripped on pnpm's o
 which is why it now discriminates on the three install commands, verified pairwise non-substring.
 
 **2. `modules/module-sources.test.ts` — the copy-tree config guard.** A guard asserting that
-`tsconfig.json`, `tsconfig.build.json` and `.oxlintrc.json` each exclude every module copy tree searched
+`tsconfig.json`, `tsconfig.build.json` and the linter config each exclude every module copy tree searched
 for the bare glob `modules/*/packageSource`. Deleting the real exclude entry **did not fail the test** —
 the string was present in the comment explaining the exclusion. *False negative, caught only by mutation
 testing.* Fixed by requiring the quoted form.
+
+That same guard caught a second mistake later, which is the shape working as intended: swapping the linter
+config from `.oxlintrc.json` to `biome.jsonc` failed it, because Biome **negates** inside `files.includes`
+(`"!modules/*/source"`) where tsconfig **lists** in `exclude` (`"modules/*/source"`). The fix was to carry
+the expected prefix per config rather than loosening the match — loosening is what re-admits the prose.
 
 **3. `tests/layout.test.ts` — workspace globs.** `not.toContain('packages')`, asserting a single-package
 project has no workspace vocabulary, matched the word inside a comment describing what the workspace

@@ -11,13 +11,21 @@ There are two of everything, for the same reason:
 |---|---|---|
 | Agent instructions | `CLAUDE.md` (this file) | `modules/base/CLAUDE.md.hbs` |
 | Agent rules | `.claude/rules/` | `modules/base/source/.claude/rules/` |
-| Linter | oxlint (`.oxlintrc.json`) | Biome (`modules/gate/source/biome.json`) |
+| Linter | Biome (`biome.jsonc`, which **extends** the shipped config) | Biome (`modules/gate/source/biome.json`) |
 | Docs | `docs/` | each module's `source/docs/` |
+| Pre-commit hook | `.githooks/pre-commit` | `modules/base/source/.githooks/pre-commit` |
+
+The linter row is the one pair that is deliberately **not** independent: `biome.jsonc` *extends*
+`modules/gate/source/biome.json`, so the factory is held to exactly the standard it prescribes and the rules
+have only one copy. That is the strongest form of this pattern, not an exception to it — where two files can
+be one plus a delta, they should be. `modules/gate/gate-config.test.ts` guards the two couplings that
+arrangement creates: the Biome version pins must match exactly, and the factory's `.biome/naming.grit` must
+stay byte-identical to the payload one.
 
 ## Verification (run before declaring any change done)
 
 ```bash
-npm run check:all       # THE gate: oxlint → tsc --noEmit → unit tests, cheap-first
+npm run check:all       # THE gate: biome → tsc --noEmit → unit tests, cheap-first
 npm run test:layout     # where files land, both layouts — seconds, installs nothing
 npm run examples:check  # zero drift = generated output is byte-for-byte unchanged
 npm run verify          # slow (~35s): generates + installs + gates 10 of 16 combinations
@@ -76,7 +84,7 @@ moving a module.
   see [`docs/publishing.md`](docs/publishing.md). Do not "simplify" a script to run the `.ts` directly.
 - **`source/` trees are never rendered.** Handlebars and GitHub Actions both claim `{{ }}`. A workflow
   containing `${{ }}` run through Handlebars emits a bare `$` and fails only in CI.
-- **`modules/*/source` and `modules/*/packageSource` are excluded from tsc, oxlint and Vitest.** Those files
+- **`modules/*/source` and `modules/*/packageSource` are excluded from tsc, Biome and Vitest.** Those files
   target the *generated* project's toolchain — different TypeScript version, aliases that resolve only
   there. Findings reported against them are not findings.
 - **package.json and template-data conflicts throw rather than last-write-wins.** Two modules disagreeing

@@ -64,7 +64,7 @@ export interface ModuleCopyTree {
  * prevent, and the reason no copy tree is ever rendered.
  *
  * ADDING A THIRD TREE means adding it here and nowhere else in code — but the three JSON configs that
- * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `.oxlintrc.json`) must be updated
+ * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `biome.jsonc`) must be updated
  * by hand. `module-sources.test.ts` fails if you forget, which is the only reason that is safe.
  */
 export const MODULE_COPY_TREES: readonly ModuleCopyTree[] = [

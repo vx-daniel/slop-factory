@@ -9,14 +9,34 @@ const FACTORY_ROOT = path.resolve(MODULES_DIRECTORY, '..')
 /**
  * Configs that must exclude every copy tree, and cannot import the list that names them.
  *
- * All three are JSON, so `MODULE_COPY_TREES` is unreachable from them and the globs are written by hand.
- * That makes "added a copy tree, forgot a config" a silent failure with three different symptoms: tsc
- * reporting errors in files that are correct where they actually live, oxlint doing the same, and the
+ * All three are JSON or JSONC, so `MODULE_COPY_TREES` is unreachable from them and the globs are written
+ * by hand. That makes "added a copy tree, forgot a config" a silent failure with three different symptoms:
+ * tsc reporting errors in files that are correct where they actually live, Biome doing the same, and the
  * build compiling payload `.ts` that must stay `.ts`. This list is what makes the hand-maintenance safe.
+ *
+ * `biome.jsonc` carries a fourth consequence the other two do not: a missing exclude there means Biome
+ * discovers the payload `biome.json` as a competing root config and refuses to run at all.
  *
  * `vitest.config.ts` is deliberately absent — it is TypeScript and derives its globs from the contract.
  */
-const CONFIGS_EXCLUDING_COPY_TREES = ['tsconfig.json', 'tsconfig.build.json', '.oxlintrc.json']
+const CONFIGS_EXCLUDING_COPY_TREES: ReadonlyArray<{
+  readonly fileName: string
+  /**
+   * How this config spells an exclusion — the prefix its glob carries, if any.
+   *
+   * The two tsconfigs LIST excluded globs in an `exclude` array, so each glob stands alone with no prefix.
+   * Biome instead NEGATES inside `files.includes`, so the same intent carries a leading `!`.
+   *
+   * Carried per config rather than loosening the assertion to "the tree name appears somewhere". That
+   * looser form would let a mention in a comment satisfy it, which is the exact trap this test fell into
+   * once already — see the note on the quoted form below.
+   */
+  readonly globPrefix: string
+}> = [
+  { fileName: 'tsconfig.json', globPrefix: '' },
+  { fileName: 'tsconfig.build.json', globPrefix: '' },
+  { fileName: 'biome.jsonc', globPrefix: '!' },
+]
 
 /**
  * Filenames npm interprets as ignore rules when building a tarball.
@@ -128,7 +148,7 @@ describe('module copy trees', () => {
   it('are excluded by every config that cannot import the copy-tree list', async () => {
     // The three JSON configs write their globs by hand because JSON cannot import
     // `MODULE_COPY_TREES`. Without this, adding a copy tree passes every other check and then breaks
-    // tsc, oxlint, or the build with a symptom that points at the payload file rather than the config.
+    // tsc, Biome, or the build with a symptom that points at the payload file rather than the config.
     //
     // MATCHES THE QUOTED FORM, and the quotes are the whole point. An earlier version searched for the
     // bare glob text and did not fail when the real exclude was deleted — because these files' own
@@ -139,16 +159,18 @@ describe('module copy trees', () => {
     // Deliberately stricter than "somewhere in the exclude array": writing the entry with a `/**` suffix
     // would fail this even though tsc would accept it. That is the safe direction to be wrong in — a
     // false positive fails loudly and is a one-line fix, where the false negative it replaces was silent.
-    for (const configFileName of CONFIGS_EXCLUDING_COPY_TREES) {
-      const configContents = await readFile(path.join(FACTORY_ROOT, configFileName), 'utf8')
+    for (const { fileName, globPrefix } of CONFIGS_EXCLUDING_COPY_TREES) {
+      const configContents = await readFile(path.join(FACTORY_ROOT, fileName), 'utf8')
 
       for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+        const expectedEntry = `"${globPrefix}modules/*/${copyTreeDirectoryName}"`
+
         expect(
           configContents,
-          `${configFileName} has no "modules/*/${copyTreeDirectoryName}" exclude entry — payload ` +
-            'files would be typechecked, linted, or compiled as if they were factory code. A mention ' +
-            'in a comment does not count; it must be a quoted glob.',
-        ).toContain(`"modules/*/${copyTreeDirectoryName}"`)
+          `${fileName} has no ${expectedEntry} exclude entry — payload files would be typechecked, ` +
+            'linted, or compiled as if they were factory code. A mention in a comment does not count; ' +
+            'it must be a quoted glob.',
+        ).toContain(expectedEntry)
       }
     }
   })

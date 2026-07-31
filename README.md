@@ -45,8 +45,8 @@ manager — `bun` needs no suffix because for Bun those are one choice. Diff `no
 ```bash
 npm install
 npm run generate          # builds, then runs the same CLI npx would run
-npm run check:all         # the gate: oxlint → tsc → unit tests, cheap-first
-npm run lint              # oxlint on its own (lint:fix to autofix)
+npm run check:all         # the gate: biome → tsc → unit tests, cheap-first
+npm run lint              # biome check on its own (lint:fix to autofix, format to reformat)
 npm run typecheck         # typechecks the factory
 npm test                  # fast unit tests: merge/render logic, registry invariants, source-tree guards
 npm run test:prompts      # reads the generator's prompt list and checks it against the contract
@@ -72,10 +72,13 @@ There are two of everything for that reason — the factory's own `CLAUDE.md`, r
 separate set that ships. Editing the wrong side is the most expensive mistake available here, so
 [CLAUDE.md](CLAUDE.md) opens with the mapping.
 
-**The factory lints itself with oxlint, not the Biome it prescribes for generated projects.** That is a
-deliberate divergence with real gaps — most importantly the abbreviation/naming gate has no oxlint
-counterpart, and oxlint has no formatter. [docs/lint-parity.md](docs/lint-parity.md) is the rule-for-rule
-accounting; read it before treating a green `npm run lint` as equivalent to a green Biome gate.
+**The factory lints itself with the Biome config it ships.** `biome.jsonc` at the root *extends*
+`modules/gate/source/biome.json` rather than restating it, so there is one copy of the rules and the factory
+is held to exactly the standard it prescribes — including the GritQL naming gate, which under the previous
+oxlint setup had no counterpart at all and so never applied to its own author.
+
+It also runs its own pre-commit hook, wired by `prepare` the same way generated projects do. Both of those
+were absent until recently: the factory prescribed a gate it did not run, and a linter it did not use.
 
 
 ## Documentation
@@ -88,7 +91,6 @@ The README is the front door; the reasoning lives in [`docs/`](docs/), one docum
 | [modules.md](docs/modules.md) | What each of the ten modules owns, which sets are exclusive, and the `bun test` trade |
 | [verification.md](docs/verification.md) | The six suites, why the derived matrix is sampled, and how to read a green run |
 | [publishing.md](docs/publishing.md) | The three-step build, and what guards the published tarball |
-| [lint-parity.md](docs/lint-parity.md) | Why the factory lints itself with oxlint, and the five gaps that cannot be closed |
 
 Generated projects get their own `docs/` folder — one document per module they were built from. See
 [Every module documents itself](docs/module-contract.md#every-module-documents-itself).

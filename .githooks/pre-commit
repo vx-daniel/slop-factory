@@ -1,0 +1,28 @@
+#!/bin/sh
+# THE FACTORY'S OWN pre-commit gate. Not to be confused with the hook it SHIPS, which lives at
+# modules/base/source/.githooks/pre-commit and is payload — edit that one to change generated projects.
+#
+# Wired via core.hooksPath by the `prepare` script on install. For a deliberate work-in-progress commit,
+# bypass with `git commit --no-verify`.
+#
+# WHY THIS EXISTS AT ALL. Until the Biome switch the factory had no hook layer: it prescribed a
+# pre-commit gate to every project it generated and ran none itself. `core.hooksPath` was unset.
+#
+# WHY IT RUNS TWO STEPS WHERE THE SHIPPED HOOK RUNS ONE. In a generated project `check:all` covers
+# everything that project has, so one command is the whole cheap gate. The factory has a second cheap
+# check outside `check:all` — `examples:check`, which proves the committed examples still match what the
+# generator produces. That is the single most frequent mistake in this repository's history: change a
+# module, forget to refresh the examples. Together they cost about 3.3 seconds, measured.
+#
+# WHAT IS DELIBERATELY NOT HERE, so a passing hook is not read as more than it is:
+#   test:prompts, test:layout — cheap, but they only fire on generator changes, and each rebuilds.
+#   verify                    — installs and gates ten generated projects. Minutes. CI's job.
+# All three run in .github/workflows/ci.yml on every push and pull request.
+#
+# No package-manager detection, unlike the shipped hook. That one is copied verbatim into projects using
+# any of three managers and must work in all of them; the factory is always npm and commits
+# package-lock.json.
+set -e
+
+npm run check:all
+npm run examples:check
