@@ -541,6 +541,28 @@ describe('answer validation', () => {
     ).rejects.toThrow(/single directory name/)
   })
 
+  it('rejects a comma inside a single array element', async () => {
+    // THE BUG THIS GUARDS, found in review. `normalizePackageNames` takes two shapes: the prompt's
+    // comma-separated STRING, which is split, and a caller's ARRAY, which is not. So an array element that
+    // itself contains a comma was never split and never rejected — `['core,api']` generated a directory
+    // named `core,api`, an npm name of `@project/core,api`, and an alias of `@core,api/*`. Three invalid
+    // artifacts, written silently, with a green generation run.
+    //
+    // Reachable only from an array caller, which is why the fix lives in the predicate BOTH shapes share
+    // rather than in the split that only one of them goes through.
+    await expect(
+      generateProject({
+        projectName: 'comma-in-element',
+        workspaceDirectory,
+        packageManager: 'npm',
+        testRunner: 'vitest',
+        projectStructure: 'monorepo',
+        packageNames: ['core,api'],
+        enableFeatures: [],
+      }),
+    ).rejects.toThrow(/separates one name from the next/)
+  })
+
   it('rejects the same package named twice', async () => {
     // Checked here as well as at the prompt, because the scripts that call `runActions` directly never
     // see the prompt validator — and a duplicate reaches disk as one package where two were asked for.

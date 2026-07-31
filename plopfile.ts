@@ -130,7 +130,9 @@ function splitPackageNames(rawAnswer: string): string[] {
  * Rejects a package name that would not be a single directory under `packages/`.
  *
  * Returns the reason rather than throwing, so both callers can present it their own way: the prompt
- * declines the answer, the normalizer throws.
+ * declines the answer, the normalizer throws. Every rule lives HERE rather than in either caller, which is
+ * what stops the two input shapes — the prompt's comma-separated string and a caller's array — from
+ * enforcing different things.
  */
 function findPackageNameProblem(packageName: string): string | undefined {
   if (packageName.includes('/') || packageName.includes('\\')) {
@@ -138,6 +140,14 @@ function findPackageNameProblem(packageName: string): string | undefined {
   }
   if (packageName.startsWith('.')) {
     return `"${packageName}" cannot start with a dot.`
+  }
+  // Unreachable from the PROMPT, whose answer is split on this character before it ever gets here — and
+  // reachable from an ARRAY caller, which is exactly why the check belongs in the shared predicate rather
+  // than in the split. `packageNames: ['core,api']` used to generate a directory literally named
+  // `core,api`, an npm name of `@project/core,api`, and an alias of `@core,api/*`: three invalid artifacts
+  // written silently, which is `packages/undefined/` wearing a different costume.
+  if (packageName.includes(PACKAGE_NAME_SEPARATOR)) {
+    return `"${packageName}" cannot contain "${PACKAGE_NAME_SEPARATOR}" — that separates one name from the next.`
   }
   return undefined
 }

@@ -1,4 +1,4 @@
-import { access, constants, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, constants, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -481,6 +481,146 @@ describe('the matrix itself', () => {
       'every reachable combination must be either installed or listed as not installed',
     ).toBe(ALL_REACHABLE_COMBINATIONS.length)
     expect(UNINSTALLED_COMBINATIONS.length, 'the sampling widened or narrowed — was that deliberate?').toBe(6)
+  })
+})
+
+/**
+ * A workspace of SEVERAL packages, installed, with a cross-package import actually resolving.
+ *
+ * ITS OWN BLOCK RATHER THAN A MATRIX ROW, because the thing under test is not an answer combination — it
+ * is what happens after generation. A second package is generated empty (`packageSource/` lands in the
+ * first), so proving the alias RESOLVES means writing a file into it, which no row of a table-driven
+ * matrix can do without making every other row carry the branch.
+ *
+ * WHY THIS EXISTS AT ALL, GIVEN THE INSTALL COST. `layout.test.ts` proves the tsconfig parses and holds
+ * one alias key per package. It cannot prove an alias RESOLVES — that needs tsc, which needs an install.
+ * A workspace whose second package cannot import its first is the failure this feature would ship without
+ * anyone noticing, because every cheap check is green for it.
+ *
+ * WHY npm + Vitest AND NOT ALSO BUN. The two runners scope discovery differently, but only one of those
+ * mechanisms is sensitive to package COUNT: Vitest's `coverage.include` is a wildcard over every package
+ * directory, which has to span them, while `bun test`'s `root = "packages"` scopes to the workspace
+ * directory and behaves the same whether one package sits under it or five. So a second installed row
+ * would re-pay the install cost to vary something the mechanism does not read. The bun multi-package path
+ * was verified by hand for this change (47 pass / 0 fail, the coverage table listing
+ * `packages/api/src/service.ts`); if that assumption about `root` ever stops holding, this comment is the
+ * thing that was wrong.
+ *
+ * (The glob is spelled out in `vitest.config.ts.hbs`, not here: a JSDoc block cannot contain it — the
+ * wildcard segment ends with the two characters that close the comment.)
+ */
+describe('a multi-package workspace', () => {
+  const FIRST_PACKAGE_NAME = 'core'
+  const SECOND_PACKAGE_NAME = 'api'
+  /** npm, because this block is about the layout rather than the manager — see the block comment. */
+  const PACKAGE_MANAGER: PackageManager = 'npm'
+
+  const managerAvailable = isPackageManagerAvailable(PACKAGE_MANAGER)
+  let projectDirectory: string
+
+  beforeAll(async () => {
+    if (!managerAvailable) {
+      return
+    }
+    projectDirectory = await generateProject({
+      projectName: 'verify-multi-package',
+      workspaceDirectory,
+      packageManager: PACKAGE_MANAGER,
+      testRunner: DEFAULT_TEST_RUNNER,
+      projectStructure: 'monorepo',
+      packageNames: [FIRST_PACKAGE_NAME, SECOND_PACKAGE_NAME],
+      enableFeatures: ['config'],
+    })
+
+    // The cross-package import, written into the package the generator leaves empty. `@core/*` is a
+    // tsconfig alias, so this resolving proves three things at once: the alias exists, it points
+    // somewhere real, and tsc reads it from the ONE root config rather than a per-package one.
+    const secondPackageSource = path.join(projectDirectory, 'packages', SECOND_PACKAGE_NAME, 'src')
+    await mkdir(secondPackageSource, { recursive: true })
+    await writeFile(
+      path.join(secondPackageSource, 'service.ts'),
+      [
+        `import { deepMerge } from '@${FIRST_PACKAGE_NAME}/config/config.js'`,
+        '',
+        'export function mergeRequestDefaults(defaults: unknown, overrides: unknown): unknown {',
+        '  return deepMerge(defaults, overrides)',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    // A test beside it, because the coverage floor spans every package: an uncovered new file would fail
+    // `coverage` for a reason that has nothing to do with the alias.
+    await writeFile(
+      path.join(secondPackageSource, 'service.test.ts'),
+      [
+        "import { describe, expect, it } from 'vitest'",
+        "import { mergeRequestDefaults } from './service.js'",
+        '',
+        "describe('mergeRequestDefaults', () => {",
+        "  it('merges an override over the defaults', () => {",
+        '    expect(mergeRequestDefaults({ retries: 1, timeout: 5 }, { timeout: 9 })).toEqual({',
+        '      retries: 1,',
+        '      timeout: 9,',
+        '    })',
+        '  })',
+        '})',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+
+    const install = runCommand({
+      command: PACKAGE_MANAGER,
+      commandArguments: ['install'],
+      workingDirectory: projectDirectory,
+    })
+    if (!install.succeeded) {
+      throw new Error(`${PACKAGE_MANAGER} install failed in ${projectDirectory}:\n${install.output}`)
+    }
+  })
+
+  it.skipIf(!managerAvailable)('passes its own gate with an import crossing the package boundary', () => {
+    // `check:all` runs biome over both packages and `tsc --noEmit` over the whole workspace. The tsc step
+    // is the one that matters here: it fails with TS2307 if `@core/*` does not resolve from inside
+    // `packages/api`, which is precisely the claim no cheaper suite can make.
+    //
+    // MUTATION-TESTED: pointing the alias at a directory that does not exist (`./packages/{{this}}/lib/*`
+    // in `modules/base/tsconfig.json.hbs`) fails this test.
+    const gate = runCommand({
+      command: PACKAGE_MANAGER,
+      commandArguments: ['run', 'check:all'],
+      workingDirectory: projectDirectory,
+    })
+
+    expect(gate.succeeded, gate.output).toBe(true)
+  })
+
+  it.skipIf(!managerAvailable)('measures coverage across every package, not just the first', async () => {
+    const coverage = runCommand({
+      command: PACKAGE_MANAGER,
+      commandArguments: ['run', 'coverage'],
+      workingDirectory: projectDirectory,
+    })
+    expect(coverage.succeeded, coverage.output).toBe(true)
+
+    // Reads the SUMMARY rather than the terminal table, which collapses fully-covered files. A floor that
+    // silently measured only the first package would still report 100% and pass — the quiet failure.
+    //
+    // MUTATION-TESTED, and this is the case that earns the assertion its place: narrowing
+    // `coverage.include` in `modules/vitest/vitest.config.ts.hbs` from every package to the first one
+    // fails THIS test while the gate test above stays GREEN. The two assertions are not redundant — one
+    // proves the alias resolves, the other proves the floor is measuring what it claims to.
+    const summaryPath = path.join(projectDirectory, 'coverage', 'coverage-summary.json')
+    const summary = JSON.parse(await readFile(summaryPath, 'utf8')) as Record<string, unknown>
+    const measuredFiles = Object.keys(summary).filter((summaryKey) => summaryKey !== 'total')
+
+    for (const packageName of [FIRST_PACKAGE_NAME, SECOND_PACKAGE_NAME]) {
+      expect(
+        measuredFiles.some((filePath) => filePath.includes(path.join('packages', packageName, 'src'))),
+        `coverage measured no file in packages/${packageName}/src — the floor does not span packages`,
+      ).toBe(true)
+    }
   })
 })
 
