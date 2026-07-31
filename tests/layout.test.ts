@@ -237,6 +237,39 @@ describe('monorepo layout — the files other modules own', () => {
     expect(packageJson.private).toBe(true)
   })
 
+  it('documents paths that actually exist', async () => {
+    // THE GUARD FOR A BUG THAT SHIPPED. `CLAUDE.md` and `README.md` are written for the reader of a
+    // generated project and both state where things are. The workspace layout landed with both still
+    // saying `@/*` → `src/*` and pointing at `src/config/config.ts`. The project worked; its own
+    // documentation directed an agent to paths that did not exist — worse than no documentation, because
+    // it reads as authoritative. Nothing checked prose, which is why nothing caught it.
+    //
+    // Asserts the path is RESOLVABLE rather than that the text matches a pattern, so it stays true if the
+    // wording changes. The `@`-prefixed alias is matched as a token to avoid the comment-vs-prose trap
+    // described in .claude/rules/asserting-on-file-content.md — these documents legitimately discuss both
+    // layouts, so a bare `src/` search would match explanation.
+    const packageSourceDirectory = `${WORKSPACE_PACKAGES_DIRECTORY}/${DEFAULT_FIRST_PACKAGE_NAME}/src`
+
+    for (const documentName of ['CLAUDE.md', 'README.md']) {
+      const contents = await readFile(path.join(projectDirectory, documentName), 'utf8')
+
+      expect(contents, `${documentName} does not mention the real source directory`).toContain(
+        packageSourceDirectory,
+      )
+      expect(contents, `${documentName} still advertises the single-package alias`).not.toContain(
+        '`@/*`',
+      )
+      expect(contents, `${documentName} should name the per-package alias`).toContain(
+        `\`@${DEFAULT_FIRST_PACKAGE_NAME}/*\``,
+      )
+    }
+
+    // And the path it names is real, not merely well-formed.
+    await expect(
+      access(path.join(projectDirectory, packageSourceDirectory, 'config', 'config.ts')),
+    ).resolves.toBeUndefined()
+  })
+
   it('ships the monorepo document and links it from the index', async () => {
     await expect(
       access(path.join(projectDirectory, 'docs', 'monorepo.md')),

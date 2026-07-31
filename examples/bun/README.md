@@ -104,9 +104,9 @@ validation, inferred types, secrets by env-var name.
 
 ## Path aliases
 
-`@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` rather than
-`../../../orders/store.js` — and survives the importing file being moved. The `.js` extension is
-still required (ESM + `NodeNext`); it resolves to the `.ts` source.
+`@/*` maps to `./src/*`, so a deep import reads
+`@/orders/store.js` rather than `../../../orders/store.js` — and survives the importing file
+being moved. The `.js` extension is still required (ESM + `NodeNext`); it resolves to the `.ts` source.
 
 `tsconfig.json`'s `paths` is the **single source of truth**. Three consumers read it rather than
 restating it: `tsc` directly, Vitest via `resolve.tsconfigPaths`, and the runtime via

@@ -49,9 +49,9 @@ detects its own package manager, so it works under npm, pnpm, yarn, and Bun alik
 does not prove the behaviour is right. Run the affected path and look at the output.
 
 **One coverage floor, all four metrics.** 85% on lines, branches, functions, and statements. A split
-floor is where coverage theatre hides. `coverage.include` measures every file under `src/`, not only
-the ones a test imported — otherwise a module with zero tests is simply absent from the report and
-the percentage looks healthy.
+floor is where coverage theatre hides. `coverage.include` measures every file matching
+`packages/*/src/**/*.ts`, not only the ones a test imported — otherwise a module with zero tests is
+simply absent from the report and the percentage looks healthy.
 
 **`*.io.ts` keeps that floor honest.** A hard floor pushes you toward one of two bad outcomes when
 you hit genuine boundary glue: lower the floor, or write fig-leaf tests asserting a mock was called.
@@ -103,15 +103,19 @@ needs.
 
 **The shipped `app` / `server` / `limits` / `services` / `features` blocks are a demonstration of the
 available patterns, not a starter set to keep.** Delete what you do not need and edit
-`src/config/config-schema.ts` to match — the schema is strict everywhere, so a stale key is a hard
+`packages/core/src/config/config-schema.ts` to match — the schema is strict everywhere, so a stale key is a hard
 error naming its path rather than a silently ignored line. Keep the mechanism: three layers, strict
 validation, inferred types, secrets by env-var name.
 
 ## Path aliases
 
-`@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` rather than
-`../../../orders/store.js` — and survives the importing file being moved. The `.js` extension is
-still required (ESM + `NodeNext`); it resolves to the `.ts` source.
+`@core/*` maps to `./packages/core/src/*`, so a deep import reads
+`@core/orders/store.js` rather than `../../../orders/store.js` — and survives the importing file
+being moved. The `.js` extension is still required (ESM + `NodeNext`); it resolves to the `.ts` source.
+
+There is **one alias per package**, so adding a package means adding an entry. Imports *within* a package
+stay relative. See `docs/monorepo.md` for why this was chosen over importing packages by their
+`package.json` name.
 
 `tsconfig.json`'s `paths` is the **single source of truth**. Three consumers read it rather than
 restating it: `tsc` directly, Vitest via `resolve.tsconfigPaths`, and the runtime via
@@ -136,15 +140,16 @@ Whichever you pick, add the output directory to `.gitignore` (`dist/` is pre-dec
 
 - [ ] **Replace the example agent-rule examples.** `.claude/rules/` cites generic modules (orders,
   sessions), not your code. A rule pointing at a module that does not exist actively misleads agents.
-- [ ] **Replace the example config** and its tests (`src/config/*.test.ts`) as you define your real
+- [ ] **Replace the example config** and its tests (`packages/core/src/config/*.test.ts`) as you define your real
   schema. Note the 85% floor is live: the first source file you add without a test fails
   `npm run coverage`. That is intended.
 - [ ] **Delete the four Viaanix-specific workflows** if this repo is not in that org —
   `claude-pr-review.yml`, `claude-issue-agent.yml`, `secret-scan.yml`, `test-audit.yml`. They
   delegate to `Viaanix/vx-repo-tools` and cannot resolve elsewhere. `ci.yml` and
   `coverage-main.yml` are self-contained and stay.
-- [ ] **Pick a test layout.** `vitest.config.ts` accepts both colocated (`src/**/*.test.ts`) and
-  separate (`test/**`). Pick one and delete the other glob rather than leaving two conventions live.
+- [ ] **Leave `test.include` out of `vitest.config.ts`.** Discovery comes from `--dir packages` in the
+  `test` and `coverage` scripts, and the two do not compose — `test.include` resolves relative to `--dir`,
+  so adding one produces `packages/packages/**` and matches nothing. See `docs/monorepo.md`.
 - [ ] **Choose an emit strategy** — above.
 
 ## Coverage
