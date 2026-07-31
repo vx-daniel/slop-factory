@@ -2,4 +2,4 @@ dist/
 .local/
 node_modules/
 *.tgz
-worktrees/
+/.claude/worktrees/
