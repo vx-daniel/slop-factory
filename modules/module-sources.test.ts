@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './module-contract.js'
@@ -54,6 +54,35 @@ async function listModuleNames(): Promise<string[]> {
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 }
 
+/**
+ * Every file in one module's copy tree that npm would honour as a pack filter, already labelled.
+ *
+ * A module missing the requested tree returns an empty list rather than throwing: shipping only some of
+ * the copy trees is the normal case, not an error.
+ */
+async function findPackFilterFiles(moduleName: string, copyTreeDirectoryName: string): Promise<string[]> {
+  let files: string[]
+  try {
+    files = await listFilesRecursively(path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName))
+  } catch {
+    return []
+  }
+
+  return files
+    .filter((filePath) => NPM_IGNORE_FILENAMES.includes(path.basename(filePath)))
+    .map((filePath) => `${moduleName}/${copyTreeDirectoryName}/${filePath}`)
+}
+
+/** Whether a module ships the named copy tree with anything in it. */
+async function shipsCopyTree(moduleName: string, copyTreeDirectoryName: string): Promise<boolean> {
+  try {
+    const files = await listFilesRecursively(path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName))
+    return files.length > 0
+  } catch {
+    return false
+  }
+}
+
 describe('module copy trees', () => {
   it('contain no file npm would treat as an ignore rule', async () => {
     const offenders: string[] = []
@@ -62,20 +91,7 @@ describe('module copy trees', () => {
       // EVERY copy tree, not just `source/`. The pack-filter hazard is a property of being payload
       // inside the published package, which both trees are.
       for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
-        const copyTreeDirectory = path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName)
-        let files: string[]
-        try {
-          files = await listFilesRecursively(copyTreeDirectory)
-        } catch {
-          // A module missing a given copy tree is legitimate; it simply has nothing to check.
-          continue
-        }
-
-        for (const filePath of files) {
-          if (NPM_IGNORE_FILENAMES.includes(path.basename(filePath))) {
-            offenders.push(`${moduleName}/${copyTreeDirectoryName}/${filePath}`)
-          }
-        }
+        offenders.push(...(await findPackFilterFiles(moduleName, copyTreeDirectoryName)))
       }
     }
 
@@ -97,15 +113,8 @@ describe('module copy trees', () => {
       const modulesShippingThisTree: string[] = []
 
       for (const moduleName of moduleNames) {
-        try {
-          const files = await listFilesRecursively(
-            path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName),
-          )
-          if (files.length > 0) {
-            modulesShippingThisTree.push(moduleName)
-          }
-        } catch {
-          continue
+        if (await shipsCopyTree(moduleName, copyTreeDirectoryName)) {
+          modulesShippingThisTree.push(moduleName)
         }
       }
 

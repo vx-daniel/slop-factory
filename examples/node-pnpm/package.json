@@ -1,5 +1,5 @@
 {
-  "name": "pnpm",
+  "name": "node-pnpm",
   "version": "0.1.0",
   "private": true,
   "type": "module",

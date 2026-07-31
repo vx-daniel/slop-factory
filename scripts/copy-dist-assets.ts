@@ -33,23 +33,19 @@ async function copyModuleAssets(moduleName: string): Promise<string[]> {
   // Every copy tree, not just `source/`. Missing one here would publish a package whose generator
   // resolves that tree at generation time and finds nothing — a failure that only the CONSUMER sees.
   for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
-    const hasCopyTree = entries.some(
-      (entry) => entry.isDirectory() && entry.name === copyTreeDirectoryName,
-    )
+    const hasCopyTree = entries.some((entry) => entry.isDirectory() && entry.name === copyTreeDirectoryName)
     if (!hasCopyTree) {
       continue
     }
     await mkdir(distModuleDirectory, { recursive: true })
-    await cp(
-      path.join(moduleDirectory, copyTreeDirectoryName),
-      path.join(distModuleDirectory, copyTreeDirectoryName),
-      { recursive: true },
-    )
+    await cp(path.join(moduleDirectory, copyTreeDirectoryName), path.join(distModuleDirectory, copyTreeDirectoryName), {
+      recursive: true,
+    })
     copied.push(`${moduleName}/${copyTreeDirectoryName}/`)
   }
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(TEMPLATE_EXTENSION)) {
+    if (!(entry.isFile() && entry.name.endsWith(TEMPLATE_EXTENSION))) {
       continue
     }
     await mkdir(distModuleDirectory, { recursive: true })
@@ -61,9 +57,7 @@ async function copyModuleAssets(moduleName: string): Promise<string[]> {
 }
 
 const moduleDirectoryEntries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
-const moduleNames = moduleDirectoryEntries
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
+const moduleNames = moduleDirectoryEntries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 
 let totalCopied = 0
 for (const moduleName of moduleNames) {

@@ -31,10 +31,11 @@ npx slop-factory --version
 ### What the output looks like
 
 [`examples/`](examples/) holds four real generated projects — one per package manager
-([`npm`](examples/npm), [`pnpm`](examples/pnpm), [`bun`](examples/bun)) plus
-[`monorepo`](examples/monorepo) for the workspace layout, which is the only axis that changes the shape of
-the tree rather than the contents of a few files. Diff `monorepo/` against `npm/` and every difference is
-the layout. They are
+([`node-npm`](examples/node-npm), [`node-pnpm`](examples/node-pnpm), [`bun`](examples/bun)) plus
+[`node-npm-monorepo`](examples/node-npm-monorepo) for the workspace layout, which is the only axis that
+changes the shape of the tree rather than the contents of a few files. Each name states its runtime and
+manager — `bun` needs no suffix because for Bun those are one choice. Diff `node-npm-monorepo/` against
+`node-npm/` and every difference is the layout. They are
 **generated artifacts**: edit the module that produces a file, then `npm run examples:refresh`.
 `examples:check` fails CI if they drift, because a stale example is a confident wrong answer. See
 [examples/README.md](examples/README.md) — including why you must not `npm install` inside one.

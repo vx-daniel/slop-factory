@@ -5,16 +5,16 @@ import type { NodePlopAPI } from 'plop'
 import {
   DEFAULT_FIRST_PACKAGE_NAME,
   DEFAULT_PROJECT_STRUCTURE,
+  MODULE_COPY_TREES,
   mergePackageJsonFragments,
   mergeTemplateData,
-  MODULE_COPY_TREES,
-  packageRootRelativePath,
-  type PackageJsonFragment,
-  type ProjectAnswers,
   PACKAGE_MANAGERS,
+  type PackageJsonFragment,
   type PackageManager,
   PROJECT_STRUCTURES,
+  type ProjectAnswers,
   type ProjectStructure,
+  packageRootRelativePath,
   renderPackageJson,
   TEST_RUNNERS,
   type TestRunner,
@@ -195,16 +195,11 @@ function toProjectAnswers(rawAnswers: Record<string, unknown>): ProjectAnswers {
     // The default applies only when nothing supplied a value — the drift-check and example scripts call
     // `runActions` directly and legitimately omit it. A prompt answer is always present, so this is not
     // a fallback that can mask a renamed prompt; `assertKnownProjectStructure` throws on anything else.
-    projectStructure: assertKnownProjectStructure(
-      rawAnswers.projectStructure ?? DEFAULT_PROJECT_STRUCTURE,
-    ),
+    projectStructure: assertKnownProjectStructure(rawAnswers.projectStructure ?? DEFAULT_PROJECT_STRUCTURE),
     firstPackageName: normalizeFirstPackageName(rawAnswers.firstPackageName),
-    enableFeatures: Array.isArray(rawAnswers.enableFeatures)
-      ? (rawAnswers.enableFeatures as string[])
-      : [],
+    enableFeatures: Array.isArray(rawAnswers.enableFeatures) ? (rawAnswers.enableFeatures as string[]) : [],
   }
 }
-
 
 /**
  * Where the generated project is written.
@@ -265,12 +260,7 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
       copyTreeDirectoryName: string
       destinationDirectory: string
     }
-    const moduleCopyTreeDirectory = path.join(
-      factoryRoot,
-      'modules',
-      moduleName,
-      copyTreeDirectoryName,
-    )
+    const moduleCopyTreeDirectory = path.join(factoryRoot, 'modules', moduleName, copyTreeDirectoryName)
     // A module shipping only SOME of the copy trees is the normal case, not an error — `npm` and `pnpm`
     // have no `packageSource/` at all, and most modules have no package-relative source either.
     try {
@@ -290,13 +280,12 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
    * first, which is a needless rendering pass over generated content.
    */
   plop.setActionType(WRITE_PACKAGE_JSON, async (_answers, config) => {
-    const { projectName, fragments, destinationDirectory, projectStructure } =
-      config as unknown as {
-        projectName: string
-        fragments: ReadonlyArray<{ moduleName: string; fragment: PackageJsonFragment }>
-        destinationDirectory: string
-        projectStructure: ProjectStructure
-      }
+    const { projectName, fragments, destinationDirectory, projectStructure } = config as unknown as {
+      projectName: string
+      fragments: ReadonlyArray<{ moduleName: string; fragment: PackageJsonFragment }>
+      destinationDirectory: string
+      projectStructure: ProjectStructure
+    }
     const merged = mergePackageJsonFragments(fragments)
     const packageJsonPath = path.join(destinationDirectory, 'package.json')
     await fs.mkdir(destinationDirectory, { recursive: true })
@@ -388,9 +377,7 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
     actions: (rawAnswers) => {
       const answers = toProjectAnswers(rawAnswers as Record<string, unknown>)
       const destinationDirectory = resolveDestinationDirectory(answers)
-      const selectedModules = PROJECT_MODULES.filter((projectModule) =>
-        projectModule.isSelected(answers),
-      )
+      const selectedModules = PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(answers))
 
       /**
        * The data every rendered template sees.

@@ -1,11 +1,7 @@
 import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_FIRST_PACKAGE_NAME,
-  PROJECT_STRUCTURES,
-  type ProjectAnswers,
-} from './module-contract.js'
+import { DEFAULT_FIRST_PACKAGE_NAME, PROJECT_STRUCTURES, type ProjectAnswers } from './module-contract.js'
 import { PROJECT_MODULES } from './registry.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -94,9 +90,7 @@ describe('module registry', () => {
           MANAGER_MODULES.some((moduleName) => moduleName === projectModule.name),
       )
 
-      expect(selectedManagerModules.map((projectModule) => projectModule.name)).toEqual([
-        answers.packageManager,
-      ])
+      expect(selectedManagerModules.map((projectModule) => projectModule.name)).toEqual([answers.packageManager])
     }
   })
 
@@ -110,9 +104,7 @@ describe('module registry', () => {
           TEST_RUNNER_MODULES.some((moduleName) => moduleName === projectModule.name),
       )
 
-      expect(selectedTestRunnerModules.map((projectModule) => projectModule.name)).toEqual([
-        answers.testRunner,
-      ])
+      expect(selectedTestRunnerModules.map((projectModule) => projectModule.name)).toEqual([answers.testRunner])
     }
   })
 
@@ -124,18 +116,14 @@ describe('module registry', () => {
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = toFullAnswers(answers)
       const merged = mergePackageJsonFragments(
-        PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
-          (projectModule) => ({
-            moduleName: projectModule.name,
-            fragment: projectModule.packageJsonFragment(fullAnswers),
-          }),
-        ),
+        PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map((projectModule) => ({
+          moduleName: projectModule.name,
+          fragment: projectModule.packageJsonFragment(fullAnswers),
+        })),
       )
 
       expect(merged.scripts, `${answers.packageManager}/${answers.testRunner}`).toHaveProperty('test')
-      expect(merged.scripts, `${answers.packageManager}/${answers.testRunner}`).toHaveProperty(
-        'coverage',
-      )
+      expect(merged.scripts, `${answers.packageManager}/${answers.testRunner}`).toHaveProperty('coverage')
     }
   })
 
@@ -146,12 +134,12 @@ describe('module registry', () => {
 
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = toFullAnswers(answers)
-      const fragments = PROJECT_MODULES.filter((projectModule) =>
-        projectModule.isSelected(fullAnswers),
-      ).map((projectModule) => ({
-        moduleName: projectModule.name,
-        fragment: projectModule.packageJsonFragment(fullAnswers),
-      }))
+      const fragments = PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
+        (projectModule) => ({
+          moduleName: projectModule.name,
+          fragment: projectModule.packageJsonFragment(fullAnswers),
+        }),
+      )
 
       expect(() => mergePackageJsonFragments(fragments)).not.toThrow()
     }
@@ -180,15 +168,12 @@ describe('module rendered templates', () => {
     // decided by registry order.
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = toFullAnswers(answers)
-      const outputPaths = PROJECT_MODULES.filter((projectModule) =>
-        projectModule.isSelected(fullAnswers),
-      ).flatMap((projectModule) =>
-        (projectModule.renderedTemplates?.(fullAnswers) ?? []).map((template) => template.outputPath),
+      const outputPaths = PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).flatMap(
+        (projectModule) =>
+          (projectModule.renderedTemplates?.(fullAnswers) ?? []).map((template) => template.outputPath),
       )
 
-      expect(new Set(outputPaths).size, `${answers.packageManager}/${answers.testRunner}`).toBe(
-        outputPaths.length,
-      )
+      expect(new Set(outputPaths).size, `${answers.packageManager}/${answers.testRunner}`).toBe(outputPaths.length)
     }
   })
 
@@ -197,12 +182,12 @@ describe('module rendered templates', () => {
 
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = toFullAnswers(answers)
-      const contributions = PROJECT_MODULES.filter((projectModule) =>
-        projectModule.isSelected(fullAnswers),
-      ).map((projectModule) => ({
-        moduleName: projectModule.name,
-        data: projectModule.templateData?.(fullAnswers) ?? {},
-      }))
+      const contributions = PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
+        (projectModule) => ({
+          moduleName: projectModule.name,
+          data: projectModule.templateData?.(fullAnswers) ?? {},
+        }),
+      )
 
       expect(() => mergeTemplateData(contributions)).not.toThrow()
     }
@@ -228,18 +213,14 @@ describe('module rendered templates', () => {
     for (const answers of REACHABLE_ANSWERS) {
       const fullAnswers = toFullAnswers(answers)
       const merged = mergeTemplateData(
-        PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map(
-          (projectModule) => ({
-            moduleName: projectModule.name,
-            data: projectModule.templateData?.(fullAnswers) ?? {},
-          }),
-        ),
+        PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(fullAnswers)).map((projectModule) => ({
+          moduleName: projectModule.name,
+          data: projectModule.templateData?.(fullAnswers) ?? {},
+        })),
       )
 
       for (const flag of REQUIRED_FLAGS) {
-        expect(flag in merged, `${flag} unset for ${answers.packageManager}/${answers.testRunner}`).toBe(
-          true,
-        )
+        expect(flag in merged, `${flag} unset for ${answers.packageManager}/${answers.testRunner}`).toBe(true)
       }
     }
   })

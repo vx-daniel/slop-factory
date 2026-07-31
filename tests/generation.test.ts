@@ -2,20 +2,20 @@ import { access, constants, mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PROJECT_MODULES } from '../modules/registry.js'
 import {
   DEFAULT_FIRST_PACKAGE_NAME,
   DEFAULT_TEST_RUNNER,
   isBunRuntime,
   PACKAGE_MANAGERS,
-  packageRootRelativePath,
   type PackageManager,
-  type ProjectAnswers,
   PROJECT_STRUCTURES,
+  type ProjectAnswers,
   type ProjectStructure,
+  packageRootRelativePath,
   TEST_RUNNERS,
   type TestRunner,
 } from '../modules/module-contract.js'
+import { PROJECT_MODULES } from '../modules/registry.js'
 import {
   generateProject,
   isIgnoredByGit,
@@ -98,18 +98,17 @@ const FEATURE_SETS: readonly (readonly string[])[] = [['config'], []]
 function everyReachableCombination(): readonly Combination[] {
   return PROJECT_STRUCTURES.flatMap((projectStructure) =>
     PACKAGE_MANAGERS.flatMap((packageManager) =>
-      TEST_RUNNERS.filter(
-        (testRunner) => testRunner === DEFAULT_TEST_RUNNER || isBunRuntime(packageManager),
-      ).flatMap((testRunner) =>
-        FEATURE_SETS.map((enableFeatures) => ({
-          label:
-            `${projectStructure} + ${packageManager} + ${testRunner} + ` +
-            `${enableFeatures.length > 0 ? enableFeatures.join(',') : 'bare'}`,
-          packageManager,
-          testRunner,
-          projectStructure,
-          enableFeatures,
-        })),
+      TEST_RUNNERS.filter((testRunner) => testRunner === DEFAULT_TEST_RUNNER || isBunRuntime(packageManager)).flatMap(
+        (testRunner) =>
+          FEATURE_SETS.map((enableFeatures) => ({
+            label:
+              `${projectStructure} + ${packageManager} + ${testRunner} + ` +
+              `${enableFeatures.length > 0 ? enableFeatures.join(',') : 'bare'}`,
+            packageManager,
+            testRunner,
+            projectStructure,
+            enableFeatures,
+          })),
       ),
     ),
   )
@@ -148,8 +147,9 @@ function isInstalledAndGated(combination: Combination): boolean {
 
 const ALL_REACHABLE_COMBINATIONS = everyReachableCombination()
 const COMBINATIONS: readonly Combination[] = ALL_REACHABLE_COMBINATIONS.filter(isInstalledAndGated)
-const UNINSTALLED_COMBINATIONS: readonly Combination[] =
-  ALL_REACHABLE_COMBINATIONS.filter((combination) => !isInstalledAndGated(combination))
+const UNINSTALLED_COMBINATIONS: readonly Combination[] = ALL_REACHABLE_COMBINATIONS.filter(
+  (combination) => !isInstalledAndGated(combination),
+)
 
 let workspaceDirectory: string
 
@@ -258,23 +258,20 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     expect(coverage.succeeded, coverage.output).toBe(true)
   })
 
-  it.skipIf(!managerAvailable || !usesVitest)(
-    'injects coverage totals into the README marker block',
-    async () => {
-      // `coverage:readme` is a separate script from `coverage` and would otherwise never run. The
-      // README is a rendered template, so its marker block could drift from what the script searches
-      // for — making the script broken on day one in every generated project.
-      const injection = runCommand({
-        command: packageManager,
-        commandArguments: ['run', 'coverage:readme'],
-        workingDirectory: projectDirectory,
-      })
-      expect(injection.succeeded, injection.output).toBe(true)
+  it.skipIf(!(managerAvailable && usesVitest))('injects coverage totals into the README marker block', async () => {
+    // `coverage:readme` is a separate script from `coverage` and would otherwise never run. The
+    // README is a rendered template, so its marker block could drift from what the script searches
+    // for — making the script broken on day one in every generated project.
+    const injection = runCommand({
+      command: packageManager,
+      commandArguments: ['run', 'coverage:readme'],
+      workingDirectory: projectDirectory,
+    })
+    expect(injection.succeeded, injection.output).toBe(true)
 
-      const readme = await readFile(path.join(projectDirectory, 'README.md'), 'utf8')
-      expect(readme).toContain('| Metric | % | Covered/Total |')
-    },
-  )
+    const readme = await readFile(path.join(projectDirectory, 'README.md'), 'utf8')
+    expect(readme).toContain('| Metric | % | Covered/Total |')
+  })
 
   it.skipIf(!managerAvailable || usesVitest)(
     'puts the coverage floor in bunfig.toml, guarded by its own test',
@@ -313,10 +310,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     // ci.yml is ONE rendered template shared by all three managers, differing only in the setup steps
     // and the install command. Interpolating the wrong manager's vocabulary is therefore a live risk,
     // and one that only shows up when CI runs — hence asserting it here.
-    const ciWorkflow = await readFile(
-      path.join(projectDirectory, '.github', 'workflows', 'ci.yml'),
-      'utf8',
-    )
+    const ciWorkflow = await readFile(path.join(projectDirectory, '.github', 'workflows', 'ci.yml'), 'utf8')
     // Only the `run:` lines, because the comments legitimately NAME the other package managers when
     // explaining the difference between them. Asserting against the whole file made this test fail on
     // its own documentation.
@@ -325,39 +319,29 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     expectOnlyThisManagersInstall({ executedCommands, packageManager, workflowName: 'ci.yml' })
   })
 
-  it.skipIf(!managerAvailable)(
-    'ships coverage-main.yml only where its package manager is correct',
-    async () => {
-      // This workflow is Vitest-specific (it reads the `json-summary` reporter's output, which `bun
-      // test` does not produce) and currently ships only for the Node managers — issue #3. Its install
-      // steps ARE interpolated, so the failure to guard against is no longer "npm ci under Bun" but the
-      // subtler one: pnpm's variant must use `pnpm exec`, and must place pnpm/action-setup before
-      // setup-node or the cache step cannot find the store.
-      const workflowPath = path.join(
-        projectDirectory,
-        '.github',
-        'workflows',
-        'coverage-main.yml',
-      )
-      const workflowExists = await access(workflowPath)
-        .then(() => true)
-        .catch(() => false)
+  it.skipIf(!managerAvailable)('ships coverage-main.yml only where its package manager is correct', async () => {
+    // This workflow is Vitest-specific (it reads the `json-summary` reporter's output, which `bun
+    // test` does not produce) and currently ships only for the Node managers — issue #3. Its install
+    // steps ARE interpolated, so the failure to guard against is no longer "npm ci under Bun" but the
+    // subtler one: pnpm's variant must use `pnpm exec`, and must place pnpm/action-setup before
+    // setup-node or the cache step cannot find the store.
+    const workflowPath = path.join(projectDirectory, '.github', 'workflows', 'coverage-main.yml')
+    const workflowExists = await access(workflowPath)
+      .then(() => true)
+      .catch(() => false)
 
-      expect(workflowExists, 'coverage-main.yml should ship only for the Node managers').toBe(
-        !usesBunRuntime,
-      )
-      if (!workflowExists) {
-        return
-      }
+    expect(workflowExists, 'coverage-main.yml should ship only for the Node managers').toBe(!usesBunRuntime)
+    if (!workflowExists) {
+      return
+    }
 
-      const workflow = await readFile(workflowPath, 'utf8')
-      expectOnlyThisManagersInstall({
-        executedCommands: commandsExecutedBy(workflow),
-        packageManager,
-        workflowName: 'coverage-main.yml',
-      })
-    },
-  )
+    const workflow = await readFile(workflowPath, 'utf8')
+    expectOnlyThisManagersInstall({
+      executedCommands: commandsExecutedBy(workflow),
+      packageManager,
+      workflowName: 'coverage-main.yml',
+    })
+  })
 
   it.skipIf(!managerAvailable)('ships an executable pre-commit hook wired via core.hooksPath', async () => {
     // The executable bit is load-bearing and silently lost by any copy that does not preserve modes:
@@ -392,27 +376,17 @@ describe.each(COMBINATIONS)('$label', (combination) => {
 
   it.skipIf(!managerAvailable)('ignores secrets and build output, but not the examples', () => {
     for (const filePath of ['.env', 'coverage/index.html', 'dist/bundle.js']) {
-      expect(
-        isIgnoredByGit({ filePath, workingDirectory: projectDirectory }),
-        `${filePath} should be ignored`,
-      ).toBe(true)
+      expect(isIgnoredByGit({ filePath, workingDirectory: projectDirectory }), `${filePath} should be ignored`).toBe(
+        true,
+      )
     }
   })
 
-  it.skipIf(!managerAvailable || !hasConfigModule)(
-    'commits config defaults while ignoring local overrides',
-    () => {
-      expect(
-        isIgnoredByGit({ filePath: 'config.defaults.toml', workingDirectory: projectDirectory }),
-      ).toBe(false)
-      expect(
-        isIgnoredByGit({ filePath: 'config.local.toml', workingDirectory: projectDirectory }),
-      ).toBe(true)
-      expect(isIgnoredByGit({ filePath: '.env.example', workingDirectory: projectDirectory })).toBe(
-        false,
-      )
-    },
-  )
+  it.skipIf(!(managerAvailable && hasConfigModule))('commits config defaults while ignoring local overrides', () => {
+    expect(isIgnoredByGit({ filePath: 'config.defaults.toml', workingDirectory: projectDirectory })).toBe(false)
+    expect(isIgnoredByGit({ filePath: 'config.local.toml', workingDirectory: projectDirectory })).toBe(true)
+    expect(isIgnoredByGit({ filePath: '.env.example', workingDirectory: projectDirectory })).toBe(false)
+  })
 
   it.skipIf(!managerAvailable)('preserves GitHub Actions expressions verbatim', async () => {
     // The single most important assertion about the rendered channel. ci.yml is now a TEMPLATE, so
@@ -421,13 +395,16 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     // and leaves a bare `$` — a workflow that installs and typechecks fine and fails only in CI.
     const workflowPath = path.join(projectDirectory, '.github', 'workflows', 'ci.yml')
 
-    await expect(readFile(workflowPath, 'utf8')).resolves.toContain('${{ github.ref }}')
+    // Written as an ESCAPED TEMPLATE LITERAL rather than a plain string, and that is not decoration.
+    // `'${{ github.ref }}'` in quotes is what `noTemplateCurlyInString` exists to catch — a string that
+    // looks like it meant to interpolate. Here the literal text IS the point, so the backslash states
+    // that deliberately instead of suppressing the rule. It is also the same escape the template itself
+    // uses, for the same reason.
+    await expect(readFile(workflowPath, 'utf8')).resolves.toContain(`\${{ github.ref }}`)
   })
 
   it.skipIf(!managerAvailable)('ships a document for every selected module, plus an index', async () => {
-    const selectedModules = PROJECT_MODULES.filter((projectModule) =>
-      projectModule.isSelected(answers),
-    )
+    const selectedModules = PROJECT_MODULES.filter((projectModule) => projectModule.isSelected(answers))
 
     const indexContents = await readFile(path.join(projectDirectory, 'docs', 'README.md'), 'utf8')
 
@@ -444,9 +421,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
   })
 
   it.skipIf(!managerAvailable)('ships no document for an unselected module', async () => {
-    const unselectedModules = PROJECT_MODULES.filter(
-      (projectModule) => !projectModule.isSelected(answers),
-    )
+    const unselectedModules = PROJECT_MODULES.filter((projectModule) => !projectModule.isSelected(answers))
 
     for (const projectModule of unselectedModules) {
       const documentPath = path.join(projectDirectory, projectModule.documentation.path)
@@ -465,17 +440,11 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     // Handlebars' double-stache HTML-escapes its output, so a summary containing a backtick or an
     // apostrophe silently becomes `&#x60;` / `&#x27;` in a file that is only ever read as markdown.
     // These are prose templates, so every interpolation must use the triple form.
-    for (const documentName of [
-      path.join('docs', 'README.md'),
-      'CLAUDE.md',
-      'README.md',
-    ]) {
+    for (const documentName of [path.join('docs', 'README.md'), 'CLAUDE.md', 'README.md']) {
       const contents = await readFile(path.join(projectDirectory, documentName), 'utf8')
 
       expect(contents, `${documentName} contains HTML-escaped characters`).not.toMatch(/&#x[0-9a-f]+;/i)
-      expect(contents, `${documentName} contains HTML-escaped entities`).not.toMatch(
-        /&(amp|quot|lt|gt|#39);/,
-      )
+      expect(contents, `${documentName} contains HTML-escaped entities`).not.toMatch(/&(amp|quot|lt|gt|#39);/)
     }
   })
 
@@ -483,9 +452,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     for (const documentName of ['CLAUDE.md', 'README.md', '.gitignore']) {
       const contents = await readFile(path.join(projectDirectory, documentName), 'utf8')
 
-      expect(contents, `${documentName} has an unresolved Handlebars expression`).not.toMatch(
-        /\{\{|\}\}/,
-      )
+      expect(contents, `${documentName} has an unresolved Handlebars expression`).not.toMatch(/\{\{|\}\}/)
     }
   })
 })

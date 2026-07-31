@@ -1,6 +1,6 @@
 import { baseModule } from './base/module.js'
-import { bunTestModule } from './bun-test/module.js'
 import { bunModule } from './bun/module.js'
+import { bunTestModule } from './bun-test/module.js'
 import { configModule } from './config/module.js'
 import { gateModule } from './gate/module.js'
 import type { ProjectModule } from './module-contract.js'

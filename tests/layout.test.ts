@@ -70,9 +70,9 @@ describe('packageRootRelativePath', () => {
   it('uses the given package name rather than a fixed one', () => {
     // A hardcoded `core` here would pass every other assertion in this file, because `core` is also the
     // default — so this is the one that would catch it.
-    expect(
-      packageRootRelativePath({ projectStructure: 'monorepo', firstPackageName: 'billing' }),
-    ).toBe(`${WORKSPACE_PACKAGES_DIRECTORY}/billing`)
+    expect(packageRootRelativePath({ projectStructure: 'monorepo', firstPackageName: 'billing' })).toBe(
+      `${WORKSPACE_PACKAGES_DIRECTORY}/billing`,
+    )
   })
 })
 
@@ -103,9 +103,10 @@ describe('single-package layout', () => {
   it('writes no workspaces field', async () => {
     // Absent, not empty. `"workspaces": []` would make npm treat the project as a workspace root with
     // no members, which changes install behaviour for a project that is not a workspace at all.
-    const packageJson = JSON.parse(
-      await readFile(path.join(projectDirectory, 'package.json'), 'utf8'),
-    ) as Record<string, unknown>
+    const packageJson = JSON.parse(await readFile(path.join(projectDirectory, 'package.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >
 
     expect(packageJson).not.toHaveProperty('workspaces')
   })
@@ -158,9 +159,9 @@ describe('monorepo layout', () => {
   })
 
   it('writes the workspaces glob', async () => {
-    const packageJson = JSON.parse(
-      await readFile(path.join(projectDirectory, 'package.json'), 'utf8'),
-    ) as { workspaces?: readonly string[] }
+    const packageJson = JSON.parse(await readFile(path.join(projectDirectory, 'package.json'), 'utf8')) as {
+      workspaces?: readonly string[]
+    }
 
     expect(packageJson.workspaces).toEqual([`${WORKSPACE_PACKAGES_DIRECTORY}/*`])
   })
@@ -198,9 +199,7 @@ describe('monorepo layout — the files other modules own', () => {
     // `packages/packages/**` and match nothing — reporting only the unmatched glob, which reads like a
     // broken path rather than a doubling. Matching the `include:` KEY at test level, not in a comment.
     const vitestConfig = await readFile(path.join(projectDirectory, 'vitest.config.ts'), 'utf8')
-    const includeKeyLines = vitestConfig
-      .split('\n')
-      .filter((line) => /^\s{4}include:/.test(line))
+    const includeKeyLines = vitestConfig.split('\n').filter((line) => /^\s{4}include:/.test(line))
 
     expect(includeKeyLines, 'test.include must be absent when --dir packages is used').toEqual([])
     // Coverage include is a DIFFERENT key, resolved from the project root, and must keep its prefix.
@@ -210,9 +209,9 @@ describe('monorepo layout — the files other modules own', () => {
   it('scopes both test and coverage scripts to the workspace directory', async () => {
     // Both, not one. Scoping only `test` would leave the gate passing while `coverage` measured a
     // different set of files — the quieter of the two failures.
-    const packageJson = JSON.parse(
-      await readFile(path.join(projectDirectory, 'package.json'), 'utf8'),
-    ) as { scripts: Record<string, string> }
+    const packageJson = JSON.parse(await readFile(path.join(projectDirectory, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>
+    }
 
     expect(packageJson.scripts.test).toContain(`--dir ${WORKSPACE_PACKAGES_DIRECTORY}`)
     expect(packageJson.scripts.coverage).toContain(`--dir ${WORKSPACE_PACKAGES_DIRECTORY}`)
@@ -223,12 +222,7 @@ describe('monorepo layout — the files other modules own', () => {
     // single-lockfile-at-the-root arrangement silently does not apply to it.
     const packageJson = JSON.parse(
       await readFile(
-        path.join(
-          projectDirectory,
-          WORKSPACE_PACKAGES_DIRECTORY,
-          DEFAULT_FIRST_PACKAGE_NAME,
-          'package.json',
-        ),
+        path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, DEFAULT_FIRST_PACKAGE_NAME, 'package.json'),
         'utf8',
       ),
     ) as { name: string; private: boolean }
@@ -253,12 +247,8 @@ describe('monorepo layout — the files other modules own', () => {
     for (const documentName of ['CLAUDE.md', 'README.md']) {
       const contents = await readFile(path.join(projectDirectory, documentName), 'utf8')
 
-      expect(contents, `${documentName} does not mention the real source directory`).toContain(
-        packageSourceDirectory,
-      )
-      expect(contents, `${documentName} still advertises the single-package alias`).not.toContain(
-        '`@/*`',
-      )
+      expect(contents, `${documentName} does not mention the real source directory`).toContain(packageSourceDirectory)
+      expect(contents, `${documentName} still advertises the single-package alias`).not.toContain('`@/*`')
       expect(contents, `${documentName} should name the per-package alias`).toContain(
         `\`@${DEFAULT_FIRST_PACKAGE_NAME}/*\``,
       )
@@ -271,9 +261,7 @@ describe('monorepo layout — the files other modules own', () => {
   })
 
   it('ships the monorepo document and links it from the index', async () => {
-    await expect(
-      access(path.join(projectDirectory, 'docs', 'monorepo.md')),
-    ).resolves.toBeUndefined()
+    await expect(access(path.join(projectDirectory, 'docs', 'monorepo.md'))).resolves.toBeUndefined()
 
     const documentIndex = await readFile(path.join(projectDirectory, 'docs', 'README.md'), 'utf8')
     expect(documentIndex).toContain('(monorepo.md)')
@@ -323,9 +311,7 @@ describe('single layout — no workspace vocabulary leaks in', () => {
   })
 
   it('puts the coverage floor guard where a bare bun test will find it', async () => {
-    await expect(
-      access(path.join(projectDirectory, 'test', 'coverage-floor.test.ts')),
-    ).resolves.toBeUndefined()
+    await expect(access(path.join(projectDirectory, 'test', 'coverage-floor.test.ts'))).resolves.toBeUndefined()
   })
 
   it('creates no per-package package.json', async () => {
@@ -347,18 +333,11 @@ describe('monorepo layout with a named package', () => {
     })
 
     expect(
-      await exists(
-        path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, namedPackage, PACKAGE_RELATIVE_FILE),
-      ),
+      await exists(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, namedPackage, PACKAGE_RELATIVE_FILE)),
     ).toBe(true)
     expect(
       await exists(
-        path.join(
-          projectDirectory,
-          WORKSPACE_PACKAGES_DIRECTORY,
-          DEFAULT_FIRST_PACKAGE_NAME,
-          PACKAGE_RELATIVE_FILE,
-        ),
+        path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, DEFAULT_FIRST_PACKAGE_NAME, PACKAGE_RELATIVE_FILE),
       ),
       'the default package name leaked through instead of the supplied one',
     ).toBe(false)
