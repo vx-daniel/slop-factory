@@ -3,20 +3,19 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Guards the two places the factory's own gate touches the gate it SHIPS.
+ * Guards the Biome version pin that the factory and its output share.
  *
  * Adopting Biome for the factory turned `modules/gate/source/biome.json` from pure payload into live
- * configuration — `biome.jsonc` extends it. That is deliberate: it means the rules cannot drift, because
- * there is only one copy of them. But it created two new couplings that nothing else checks, and both fail
- * quietly.
+ * configuration — `biome.jsonc` extends it. That is deliberate: the rules cannot drift, because there is only
+ * one copy of them. But it left one coupling nothing else checks, and it fails quietly.
+ *
+ * The OTHER coupling that arrangement created — the byte-identical `.biome/naming.grit` copy at the factory
+ * root — moved to `modules/payload-copies.test.ts` once a second such copy appeared. Both are the same idea:
+ * a file the factory uses that is authoritatively owned by its payload.
  */
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const GATE_MODULE_PATH = path.join(import.meta.dirname, 'module.ts')
-
-/** The payload plugin, and the copy `biome.jsonc` actually loads. */
-const SHIPPED_PLUGIN_PATH = path.join(import.meta.dirname, 'source', '.biome', 'naming.grit')
-const FACTORY_PLUGIN_PATH = path.join(FACTORY_ROOT, '.biome', 'naming.grit')
 
 /** Reads the exact version string the gate module pins for generated projects. */
 async function readShippedBiomeVersion(): Promise<string | undefined> {
@@ -53,27 +52,5 @@ describe('the factory gate and the gate it ships', () => {
       `the factory pins Biome at ${factoryVersion} while shipping ${shippedVersion}. Pin both exactly ` +
         'and identically, or the factory lints itself against rules its output never sees.',
     ).toBe(shippedVersion)
-  })
-
-  it('use the same naming plugin, byte for byte', async () => {
-    // A COPY THAT MUST NOT DRIFT. `biome.jsonc` extends the shipped config, and `extends` inherits
-    // `plugins: ["./.biome/naming.grit"]` — but that relative path resolves against the EXTENDING config's
-    // directory, not the base's. Measured on Biome 2.5.6: pointing it at the payload path fails with
-    // "Cannot read file" no matter how the path is written, so the factory needs its own copy at
-    // `.biome/naming.grit`.
-    //
-    // An unguarded copy of a 13 KB rule file is precisely the drift the Biome switch existed to remove, so
-    // this asserts byte-identity. If it fails, copy the payload one over the factory one — the payload is
-    // the source of truth, because it is what adopters actually receive.
-    const [shippedPlugin, factoryPlugin] = await Promise.all([
-      readFile(SHIPPED_PLUGIN_PATH, 'utf8'),
-      readFile(FACTORY_PLUGIN_PATH, 'utf8'),
-    ])
-
-    expect(
-      factoryPlugin,
-      '.biome/naming.grit has drifted from modules/gate/source/.biome/naming.grit. The payload copy is ' +
-        'authoritative; copy it over the factory one rather than reconciling by hand.',
-    ).toBe(shippedPlugin)
   })
 })
