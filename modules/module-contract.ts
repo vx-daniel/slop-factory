@@ -64,7 +64,7 @@ export interface ModuleCopyTree {
  * prevent, and the reason no copy tree is ever rendered.
  *
  * ADDING A THIRD TREE means adding it here and nowhere else in code — but the three JSON configs that
- * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `.oxlintrc.json`) must be updated
+ * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `biome.jsonc`) must be updated
  * by hand. `module-sources.test.ts` fails if you forget, which is the only reason that is safe.
  */
 export const MODULE_COPY_TREES: readonly ModuleCopyTree[] = [
@@ -180,9 +180,7 @@ export function pathVocabulary(answers: {
   readonly firstPackageName: string
 }): Readonly<Record<string, string>> {
   const isMonorepoLayout = answers.projectStructure === 'monorepo'
-  const sourceDirectory = isMonorepoLayout
-    ? `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}/src`
-    : 'src'
+  const sourceDirectory = isMonorepoLayout ? `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}/src` : 'src'
 
   return {
     /** Where the package's source lives, relative to the project root. */
@@ -192,13 +190,9 @@ export function pathVocabulary(answers: {
     /** What that pattern resolves to, written as it appears in tsconfig. */
     importAliasTarget: `./${sourceDirectory}/*`,
     /** An example aliased import, for prose that shows one. */
-    exampleAliasedImport: isMonorepoLayout
-      ? `@${answers.firstPackageName}/orders/store.js`
-      : '@/orders/store.js',
+    exampleAliasedImport: isMonorepoLayout ? `@${answers.firstPackageName}/orders/store.js` : '@/orders/store.js',
     /** The glob coverage measures, matching what the runner config actually sets. */
-    coverageSourceGlob: isMonorepoLayout
-      ? `${WORKSPACE_PACKAGES_DIRECTORY}/*/src/**/*.ts`
-      : 'src/**/*.ts',
+    coverageSourceGlob: isMonorepoLayout ? `${WORKSPACE_PACKAGES_DIRECTORY}/*/src/**/*.ts` : 'src/**/*.ts',
   }
 }
 
@@ -274,12 +268,7 @@ export interface PackageJsonFragment {
 }
 
 /** The package.json sections a module may contribute to, in the order they are merged. */
-export const MERGEABLE_PACKAGE_JSON_SECTIONS = [
-  'scripts',
-  'dependencies',
-  'devDependencies',
-  'engines',
-] as const
+export const MERGEABLE_PACKAGE_JSON_SECTIONS = ['scripts', 'dependencies', 'devDependencies', 'engines'] as const
 export type MergeablePackageJsonSection = (typeof MERGEABLE_PACKAGE_JSON_SECTIONS)[number]
 
 /**

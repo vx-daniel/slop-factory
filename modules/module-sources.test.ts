@@ -1,22 +1,42 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './module-contract.js'
 
-const MODULES_DIRECTORY = import.meta.dirname
+const MODULES_DIRECTORY: string = import.meta.dirname
 const FACTORY_ROOT = path.resolve(MODULES_DIRECTORY, '..')
 
 /**
  * Configs that must exclude every copy tree, and cannot import the list that names them.
  *
- * All three are JSON, so `MODULE_COPY_TREES` is unreachable from them and the globs are written by hand.
- * That makes "added a copy tree, forgot a config" a silent failure with three different symptoms: tsc
- * reporting errors in files that are correct where they actually live, oxlint doing the same, and the
+ * All three are JSON or JSONC, so `MODULE_COPY_TREES` is unreachable from them and the globs are written
+ * by hand. That makes "added a copy tree, forgot a config" a silent failure with three different symptoms:
+ * tsc reporting errors in files that are correct where they actually live, Biome doing the same, and the
  * build compiling payload `.ts` that must stay `.ts`. This list is what makes the hand-maintenance safe.
+ *
+ * `biome.jsonc` carries a fourth consequence the other two do not: a missing exclude there means Biome
+ * discovers the payload `biome.json` as a competing root config and refuses to run at all.
  *
  * `vitest.config.ts` is deliberately absent — it is TypeScript and derives its globs from the contract.
  */
-const CONFIGS_EXCLUDING_COPY_TREES = ['tsconfig.json', 'tsconfig.build.json', '.oxlintrc.json']
+const CONFIGS_EXCLUDING_COPY_TREES: ReadonlyArray<{
+  readonly fileName: string
+  /**
+   * How this config spells an exclusion — the prefix its glob carries, if any.
+   *
+   * The two tsconfigs LIST excluded globs in an `exclude` array, so each glob stands alone with no prefix.
+   * Biome instead NEGATES inside `files.includes`, so the same intent carries a leading `!`.
+   *
+   * Carried per config rather than loosening the assertion to "the tree name appears somewhere". That
+   * looser form would let a mention in a comment satisfy it, which is the exact trap this test fell into
+   * once already — see the note on the quoted form below.
+   */
+  readonly globPrefix: string
+}> = [
+  { fileName: 'tsconfig.json', globPrefix: '' },
+  { fileName: 'tsconfig.build.json', globPrefix: '' },
+  { fileName: 'biome.jsonc', globPrefix: '!' },
+]
 
 /**
  * Filenames npm interprets as ignore rules when building a tarball.
@@ -42,16 +62,45 @@ const NPM_IGNORE_FILENAMES = ['.gitignore', '.npmignore']
 
 /** Recursively collects every file path under a directory, relative to it. */
 async function listFilesRecursively(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true, recursive: true })
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
+  const directoryEntries = await readdir(directory, { withFileTypes: true, recursive: true })
+  return directoryEntries
+    .filter((directoryEntry) => directoryEntry.isFile())
+    .map((fileEntry) => path.relative(directory, path.join(fileEntry.parentPath, fileEntry.name)))
 }
 
 /** Module directory names, discovered rather than listed, so a new module is covered automatically. */
 async function listModuleNames(): Promise<string[]> {
-  const entries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  const moduleEntries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
+  return moduleEntries.filter((moduleEntry) => moduleEntry.isDirectory()).map((moduleEntry) => moduleEntry.name)
+}
+
+/**
+ * Every file in one module's copy tree that npm would honour as a pack filter, already labelled.
+ *
+ * A module missing the requested tree returns an empty list rather than throwing: shipping only some of
+ * the copy trees is the normal case, not an error.
+ */
+async function findPackFilterFiles(moduleName: string, copyTreeDirectoryName: string): Promise<string[]> {
+  let files: string[]
+  try {
+    files = await listFilesRecursively(path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName))
+  } catch {
+    return []
+  }
+
+  return files
+    .filter((filePath) => NPM_IGNORE_FILENAMES.includes(path.basename(filePath)))
+    .map((filePath) => `${moduleName}/${copyTreeDirectoryName}/${filePath}`)
+}
+
+/** Whether a module ships the named copy tree with anything in it. */
+async function shipsCopyTree(moduleName: string, copyTreeDirectoryName: string): Promise<boolean> {
+  try {
+    const files = await listFilesRecursively(path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName))
+    return files.length > 0
+  } catch {
+    return false
+  }
 }
 
 describe('module copy trees', () => {
@@ -62,20 +111,7 @@ describe('module copy trees', () => {
       // EVERY copy tree, not just `source/`. The pack-filter hazard is a property of being payload
       // inside the published package, which both trees are.
       for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
-        const copyTreeDirectory = path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName)
-        let files: string[]
-        try {
-          files = await listFilesRecursively(copyTreeDirectory)
-        } catch {
-          // A module missing a given copy tree is legitimate; it simply has nothing to check.
-          continue
-        }
-
-        for (const filePath of files) {
-          if (NPM_IGNORE_FILENAMES.includes(path.basename(filePath))) {
-            offenders.push(`${moduleName}/${copyTreeDirectoryName}/${filePath}`)
-          }
-        }
+        offenders.push(...(await findPackFilterFiles(moduleName, copyTreeDirectoryName)))
       }
     }
 
@@ -97,15 +133,8 @@ describe('module copy trees', () => {
       const modulesShippingThisTree: string[] = []
 
       for (const moduleName of moduleNames) {
-        try {
-          const files = await listFilesRecursively(
-            path.join(MODULES_DIRECTORY, moduleName, copyTreeDirectoryName),
-          )
-          if (files.length > 0) {
-            modulesShippingThisTree.push(moduleName)
-          }
-        } catch {
-          continue
+        if (await shipsCopyTree(moduleName, copyTreeDirectoryName)) {
+          modulesShippingThisTree.push(moduleName)
         }
       }
 
@@ -119,7 +148,7 @@ describe('module copy trees', () => {
   it('are excluded by every config that cannot import the copy-tree list', async () => {
     // The three JSON configs write their globs by hand because JSON cannot import
     // `MODULE_COPY_TREES`. Without this, adding a copy tree passes every other check and then breaks
-    // tsc, oxlint, or the build with a symptom that points at the payload file rather than the config.
+    // tsc, Biome, or the build with a symptom that points at the payload file rather than the config.
     //
     // MATCHES THE QUOTED FORM, and the quotes are the whole point. An earlier version searched for the
     // bare glob text and did not fail when the real exclude was deleted — because these files' own
@@ -130,16 +159,18 @@ describe('module copy trees', () => {
     // Deliberately stricter than "somewhere in the exclude array": writing the entry with a `/**` suffix
     // would fail this even though tsc would accept it. That is the safe direction to be wrong in — a
     // false positive fails loudly and is a one-line fix, where the false negative it replaces was silent.
-    for (const configFileName of CONFIGS_EXCLUDING_COPY_TREES) {
-      const configContents = await readFile(path.join(FACTORY_ROOT, configFileName), 'utf8')
+    for (const { fileName, globPrefix } of CONFIGS_EXCLUDING_COPY_TREES) {
+      const configContents = await readFile(path.join(FACTORY_ROOT, fileName), 'utf8')
 
       for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
+        const expectedEntry = `"${globPrefix}modules/*/${copyTreeDirectoryName}"`
+
         expect(
           configContents,
-          `${configFileName} has no "modules/*/${copyTreeDirectoryName}" exclude entry — payload ` +
-            'files would be typechecked, linted, or compiled as if they were factory code. A mention ' +
-            'in a comment does not count; it must be a quoted glob.',
-        ).toContain(`"modules/*/${copyTreeDirectoryName}"`)
+          `${fileName} has no ${expectedEntry} exclude entry — payload files would be typechecked, ` +
+            'linted, or compiled as if they were factory code. A mention in a comment does not count; ' +
+            'it must be a quoted glob.',
+        ).toContain(expectedEntry)
       }
     }
   })

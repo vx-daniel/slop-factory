@@ -1,8 +1,8 @@
 import {
   type PackageJsonFragment,
-  pathVocabulary,
   type ProjectAnswers,
   type ProjectModule,
+  pathVocabulary,
   type RenderedTemplate,
 } from '../module-contract.js'
 

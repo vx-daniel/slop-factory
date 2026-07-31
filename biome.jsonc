@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  // THE FACTORY'S OWN LINTER, and it deliberately EXTENDS the config it ships to generated projects
+  // rather than restating it. The factory is now held to exactly the standard it prescribes — including
+  // the GritQL naming plugin — and the rules cannot drift, because there is only one copy of them.
+  //
+  // This replaced a parallel oxlint config. That divergence needed a 166-line document to account for
+  // five gaps that could not be closed, the largest being that the abbreviation/naming gate had no
+  // oxlint counterpart at all: the factory's most opinionated rule did not apply to the factory itself.
+  // Adopting Biome deleted the divergence and the document with it.
+  //
+  // WHY `.jsonc` AND NOT `biome.json`. `biome.json` is parsed as STRICT JSON — a `//` comment in it makes
+  // Biome fail to load the config and then report "found a nested root configuration" against unrelated
+  // files, which is a genuinely misleading error. Biome reads `biome.jsonc` natively and allows comments
+  // there. The file this factory SHIPS is `biome.json` with no comments, its reasoning carried in
+  // `docs/the-gate.md` instead; the two extensions are not an inconsistency, they are the same
+  // constraint answered differently for a config that must document itself in place.
+  "extends": ["./modules/gate/source/biome.json"],
+
+  // `plugins` is NOT declared here, on purpose. `extends` inherits `plugins: ["./.biome/naming.grit"]`
+  // from the base config, and that relative path resolves against THIS file's directory rather than the
+  // base's — so the factory needs its own `.biome/naming.grit`, and re-declaring `plugins` here would
+  // load the same plugin twice. `modules/gate/gate-config.test.ts` asserts that copy stays byte-identical
+  // to the payload one: an unguarded copy of a 13 KB rule file is exactly the drift this change removes.
+
+  "files": {
+    // The excludes use the DIRECTORY form, not `dir/**`, and that is load-bearing rather than stylistic.
+    //
+    // Biome 2.x fails with "found a nested root configuration" when it discovers a second Biome config
+    // during traversal, and there are five in this tree: the payload template, one per committed example,
+    // and one under `dist/`. Measured on 2.5.6: `!modules/*/source` prevents that discovery, while
+    // `!modules/*/source/**` does NOT — it excludes the files but still finds the config. Adding a `/**`
+    // suffix to any line below breaks `npm run lint` outright, with an error naming the nested config
+    // rather than this file.
+    //
+    // Every entry is a tree the factory must not lint, not merely one it need not:
+    //   modules/*/source, modules/*/packageSource — payload for a GENERATED project. Different TypeScript
+    //     version, `@/*` aliases that resolve only there, and one file declaring a module that exists only
+    //     under Bun. Findings against them are not findings.
+    //   examples — generated artifacts. `examples:check` already proves them byte-identical to the
+    //     generator, so linting them could only report what the modules already answer for.
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.claude",
+      "!modules/*/source",
+      "!modules/*/packageSource",
+      "!examples"
+    ]
+  }
+}

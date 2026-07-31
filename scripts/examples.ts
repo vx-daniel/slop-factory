@@ -25,11 +25,7 @@
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type {
-  PackageManager,
-  ProjectStructure,
-  TestRunner,
-} from '../modules/module-contract.js'
+import type { PackageManager, ProjectStructure, TestRunner } from '../modules/module-contract.js'
 import { generateProject } from '../tests/generate-project.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -67,22 +63,22 @@ interface ExampleProject {
  */
 const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
   {
-    directoryName: 'npm',
+    directoryName: 'node-npm',
     packageManager: 'npm',
     testRunner: 'vitest',
     enableFeatures: ['config'],
     rationale:
-      'The default path. npm implies Node and therefore Vitest (the runner prompt is skipped), so this ' +
-      'is the only shape an npm answer can produce.',
+      'The default path. npm implies the Node runtime and therefore Vitest (the runner prompt is ' +
+      'skipped), so this is the only shape an npm answer can produce.',
   },
   {
-    directoryName: 'pnpm',
+    directoryName: 'node-pnpm',
     packageManager: 'pnpm',
     testRunner: 'vitest',
     enableFeatures: ['config'],
     rationale:
-      'Committed despite differing from the npm example in only a handful of files, because those files ' +
-      'are the ones people get wrong: the lockfile rule, and the CI step ORDER that pnpm requires.',
+      'Committed despite differing from node-npm in only a handful of files, because those files are the ' +
+      'ones people get wrong: the lockfile rule, and the CI step ORDER that pnpm requires.',
   },
   {
     directoryName: 'bun',
@@ -90,20 +86,21 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     testRunner: 'bun-test',
     enableFeatures: ['config'],
     rationale:
-      "Bun with its own test runner. Chosen over bun + Vitest because that combination differs from the " +
-      'npm example in only a handful of files, while this one is a genuinely different tree.',
+      'Bun with its own test runner, and the one name that needs no manager suffix — for Bun the runtime ' +
+      'and the manager are one choice. Chosen over bun + Vitest because that combination differs from ' +
+      'node-npm in only a handful of files, while this one is a genuinely different tree.',
   },
   {
-    directoryName: 'monorepo',
+    directoryName: 'node-npm-monorepo',
     packageManager: 'npm',
     testRunner: 'vitest',
     projectStructure: 'monorepo',
     enableFeatures: ['config'],
     rationale:
       'The workspace layout, which is the only example that differs STRUCTURALLY rather than in a few ' +
-      'files — source moves under packages/<name>/ while config stays at the root. Paired with npm + ' +
-      'Vitest because that is the layout at its plainest: the manager and runner deltas are already ' +
-      'readable in the other three examples, so this one isolates the layout.',
+      'files — source moves under packages/<name>/ while config stays at the root. Named as node-npm ' +
+      'plus a layout suffix, and paired with npm + Vitest deliberately: the manager and runner deltas are ' +
+      'already readable in the other three, so diffing this against node-npm isolates the layout alone.',
   },
 ]
 
@@ -117,23 +114,27 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
  *
  * Found the hard way: renaming the `node` example to `npm` left `examples/node` on disk, still committed,
  * describing a `projectRuntime` answer the generator no longer accepts, and `examples:check` said ok.
+ *
+ * It has since earned itself twice. The rename to the current `node-npm` / `node-pnpm` / `bun` /
+ * `node-npm-monorepo` scheme reported three ORPHANs alongside three MISSINGs, which is what turned a
+ * rename into a mechanical operation rather than a hunt for leftovers.
  */
 async function findOrphanedExampleDirectories(): Promise<string[]> {
   const expectedDirectoryNames = new Set(EXAMPLE_PROJECTS.map((example) => example.directoryName))
-  const entries = await readdir(EXAMPLES_DIRECTORY, { withFileTypes: true })
+  const exampleEntries = await readdir(EXAMPLES_DIRECTORY, { withFileTypes: true })
 
-  return entries
-    .filter((entry) => entry.isDirectory() && !expectedDirectoryNames.has(entry.name))
-    .map((entry) => entry.name)
+  return exampleEntries
+    .filter((exampleEntry) => exampleEntry.isDirectory() && !expectedDirectoryNames.has(exampleEntry.name))
+    .map((exampleEntry) => exampleEntry.name)
     .sort()
 }
 
 /** Every file under a directory, as paths relative to it. Sorted, so comparisons are deterministic. */
 async function listFilesRecursively(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true, recursive: true })
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
+  const directoryEntries = await readdir(directory, { withFileTypes: true, recursive: true })
+  return directoryEntries
+    .filter((directoryEntry) => directoryEntry.isFile())
+    .map((fileEntry) => path.relative(directory, path.join(fileEntry.parentPath, fileEntry.name)))
     .sort()
 }
 
@@ -184,10 +185,7 @@ async function findDrift(options: {
     const generatedPath = path.join(generatedDirectory, filePath)
     const committedPath = path.join(committedDirectory, filePath)
 
-    const [generatedContents, committedContents] = await Promise.all([
-      readFile(generatedPath),
-      readFile(committedPath),
-    ])
+    const [generatedContents, committedContents] = await Promise.all([readFile(generatedPath), readFile(committedPath)])
     if (!generatedContents.equals(committedContents)) {
       changed.push(filePath)
     }
@@ -234,54 +232,77 @@ async function refreshExamples(): Promise<number> {
   return 0
 }
 
+/**
+ * How each kind of drift reads in the report.
+ *
+ * A table rather than four near-identical loops. They differed only in which field they walked and what
+ * they called it, which is exactly the shape this repository's own duplication rule says to extract.
+ */
+const DRIFT_REPORT_LABELS: ReadonlyArray<{
+  readonly kind: keyof DriftReport
+  readonly label: string
+}> = [
+  { kind: 'missing', label: 'generator produces but example lacks' },
+  { kind: 'unexpected', label: 'example has but generator no longer produces' },
+  { kind: 'changed', label: 'content differs' },
+  { kind: 'modeChanged', label: 'executable bit differs' },
+]
+
+/** Writes every difference found for one example, grouped by kind. */
+function reportDrift(directoryName: string, drift: DriftReport): void {
+  process.stderr.write(`  DRIFT examples/${directoryName}\n`)
+
+  for (const { kind, label } of DRIFT_REPORT_LABELS) {
+    for (const filePath of drift[kind]) {
+      process.stderr.write(`    ${label}: ${filePath}\n`)
+    }
+  }
+}
+
+/**
+ * Whether one committed example differs from what the generator now produces. Reports as it goes.
+ *
+ * Extracted from `checkExamples` so that function stays a readable loop plus the whole-directory orphan
+ * check, rather than carrying per-example detail as well.
+ */
+async function checkOneExample(example: ExampleProject, workspaceDirectory: string): Promise<boolean> {
+  const committedDirectory = path.join(EXAMPLES_DIRECTORY, example.directoryName)
+  try {
+    await stat(committedDirectory)
+  } catch {
+    process.stderr.write(`  MISSING examples/${example.directoryName} — run \`npm run examples:refresh\`\n`)
+    return true
+  }
+
+  const generatedDirectory = await generateProject({
+    projectName: example.directoryName,
+    workspaceDirectory,
+    packageManager: example.packageManager,
+    testRunner: example.testRunner,
+    projectStructure: example.projectStructure,
+    enableFeatures: example.enableFeatures,
+  })
+
+  const drift = await findDrift({ generatedDirectory, committedDirectory })
+  const totalDrift = DRIFT_REPORT_LABELS.reduce((runningTotal, { kind }) => runningTotal + drift[kind].length, 0)
+
+  if (totalDrift === 0) {
+    process.stdout.write(`  ok  examples/${example.directoryName}\n`)
+    return false
+  }
+
+  reportDrift(example.directoryName, drift)
+  return true
+}
+
 async function checkExamples(): Promise<number> {
   const workspaceDirectory = await mkdtemp(path.join(os.tmpdir(), 'slop-factory-examples-'))
   let driftFound = false
 
   try {
     for (const example of EXAMPLE_PROJECTS) {
-      const committedDirectory = path.join(EXAMPLES_DIRECTORY, example.directoryName)
-      try {
-        await stat(committedDirectory)
-      } catch {
-        process.stderr.write(
-          `  MISSING examples/${example.directoryName} — run \`npm run examples:refresh\`\n`,
-        )
+      if (await checkOneExample(example, workspaceDirectory)) {
         driftFound = true
-        continue
-      }
-
-      const generatedDirectory = await generateProject({
-        projectName: example.directoryName,
-        workspaceDirectory,
-        packageManager: example.packageManager,
-        testRunner: example.testRunner,
-        projectStructure: example.projectStructure,
-        enableFeatures: example.enableFeatures,
-      })
-
-      const drift = await findDrift({ generatedDirectory, committedDirectory })
-      const totalDrift =
-        drift.missing.length + drift.unexpected.length + drift.changed.length + drift.modeChanged.length
-
-      if (totalDrift === 0) {
-        process.stdout.write(`  ok  examples/${example.directoryName}\n`)
-        continue
-      }
-
-      driftFound = true
-      process.stderr.write(`  DRIFT examples/${example.directoryName}\n`)
-      for (const filePath of drift.missing) {
-        process.stderr.write(`    generator produces but example lacks: ${filePath}\n`)
-      }
-      for (const filePath of drift.unexpected) {
-        process.stderr.write(`    example has but generator no longer produces: ${filePath}\n`)
-      }
-      for (const filePath of drift.changed) {
-        process.stderr.write(`    content differs: ${filePath}\n`)
-      }
-      for (const filePath of drift.modeChanged) {
-        process.stderr.write(`    executable bit differs: ${filePath}\n`)
       }
     }
 

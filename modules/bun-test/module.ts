@@ -1,9 +1,4 @@
-import type {
-  PackageJsonFragment,
-  ProjectAnswers,
-  ProjectModule,
-  RenderedTemplate,
-} from '../module-contract.js'
+import type { PackageJsonFragment, ProjectAnswers, ProjectModule, RenderedTemplate } from '../module-contract.js'
 
 const BUN_TYPES_VERSION = '^1.3.14'
 

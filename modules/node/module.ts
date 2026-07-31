@@ -1,9 +1,9 @@
 import {
   isBunRuntime,
-  typescriptRunnerPrefix,
   type PackageJsonFragment,
   type ProjectAnswers,
   type ProjectModule,
+  typescriptRunnerPrefix,
 } from '../module-contract.js'
 
 /** Node 24 is the floor because the project runs `.ts` without a build step, and native

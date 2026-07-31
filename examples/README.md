@@ -30,7 +30,7 @@ pre-commit gate. Verified:
 ```console
 $ git config core.hooksPath          # factory root, before
 .githooks-outer
-$ cd examples/npm && npm install     # fires the generated prepare script
+$ cd examples/node-npm && npm install   # fires the generated prepare script
 $ cd ../.. && git config core.hooksPath
 .githooks                            # hijacked
 ```
@@ -47,10 +47,10 @@ executed.
 
 | Directory | Answers | Why this one |
 |---|---|---|
-| [`npm/`](npm/) | manager `npm`, runner `vitest`, features `config` | The default path. npm implies Node and therefore Vitest — the runner prompt is skipped — so this is the only shape an npm answer can produce. |
-| [`pnpm/`](pnpm/) | manager `pnpm`, runner `vitest`, features `config` | Differs from `npm/` in only eight files, and is committed *because* those are the eight people get wrong: the lockfile rule, and the CI step **order** pnpm requires. |
-| [`bun/`](bun/) | manager `bun`, runner `bun-test`, features `config` | Bun with its own runner. Chosen over bun + Vitest because that combination differs from `npm/` in only a handful of files, while this one is a genuinely different tree. |
-| [`monorepo/`](monorepo/) | layout `monorepo`, manager `npm`, runner `vitest`, features `config` | The workspace layout — the only example that differs **structurally**: source moves under `packages/core/`, config stays at the root. Paired with npm + Vitest because the manager and runner deltas are already readable above, so this isolates the layout. |
+| [`node-npm/`](node-npm/) | manager `npm`, runner `vitest`, features `config` | The default path. npm implies the Node runtime and therefore Vitest — the runner prompt is skipped — so this is the only shape an npm answer can produce. |
+| [`node-pnpm/`](node-pnpm/) | manager `pnpm`, runner `vitest`, features `config` | Differs from `node-npm/` in only eight files, and is committed *because* those are the eight people get wrong: the lockfile rule, and the CI step **order** pnpm requires. |
+| [`bun/`](bun/) | manager `bun`, runner `bun-test`, features `config` | Bun with its own runner. Chosen over bun + Vitest because that combination differs from `node-npm/` in only a handful of files, while this one is a genuinely different tree. |
+| [`node-npm-monorepo/`](node-npm-monorepo/) | layout `monorepo`, manager `npm`, runner `vitest`, features `config` | The workspace layout — the only example that differs **structurally**: source moves under `packages/core/`, config stays at the root. Named as `node-npm` plus a layout suffix, and paired with npm + Vitest because the manager and runner deltas are already readable above, so this isolates the layout. |
 
 The generator offers **sixteen** combinations (two layouts × three managers × config on/off, plus the
 second runner choice that only the bun manager can reach). Twelve are not committed, deliberately:
@@ -60,10 +60,10 @@ add review surface without adding verification.
 The first three above vary by **manager and runner** — differences measured in a handful of files. The
 fourth varies by **layout**, which is the only axis that changes the shape of the tree.
 
-### Why `pnpm/` earns its place and `bun` + Vitest does not
+### Why `node-pnpm/` earns its place and `bun` + Vitest does not
 
 Both are near-duplicates of a committed example, so the tie-breaker is whether the delta contains a
-mistake worth showing. `pnpm/`'s does:
+mistake worth showing. `node-pnpm/`'s does:
 
 ```yaml
 - uses: pnpm/action-setup@v4      # MUST precede setup-node
@@ -77,12 +77,12 @@ you looking in the wrong place. A committed example makes the order readable ins
 
 ### What `bun` + Vitest would look like
 
-Not committed, so here is the delta rather than leaving it to be guessed. Starting from `npm/`, a
+Not committed, so here is the delta rather than leaving it to be guessed. Starting from `node-npm/`, a
 bun + Vitest project differs in only:
 
 - `package.json` — `engines.bun` instead of `engines.node`, no `tsx`, and `bun` as the script runner
   prefix (`bun scripts/gate.ts` rather than `node --import tsx scripts/gate.ts`)
-- `.gitignore` — commits `bun.lock`, ignores `package-lock.json` (inverted from `npm/`)
+- `.gitignore` — commits `bun.lock`, ignores `package-lock.json` (inverted from `node-npm/`)
 - `.github/workflows/ci.yml` — `oven-sh/setup-bun` and `bun install --frozen-lockfile`
 - `.github/workflows/coverage-main.yml` — **absent**. No longer because the workflow is npm-specific — its
   install steps are interpolated now — but because it is unverified under Bun, see
@@ -90,14 +90,14 @@ bun + Vitest project differs in only:
 - `docs/bun-runtime.md` replaces `docs/node-runtime.md` and `docs/npm.md`
 
 Everything else — `vitest.config.ts`, the four-metric floor, the `COVERAGE.md` pipeline, `src/config/` —
-is identical to `npm/`.
+is identical to `node-npm/`.
 
 ### What the monorepo example shows that the others cannot
 
 The layout is the one axis where reading a diff beats reading prose, because the tree itself changes:
 
 ```
-monorepo/
+node-npm-monorepo/
   package.json          ← "workspaces": ["packages/*"], all devDependencies, the lockfile
   tsconfig.json         ← ONE config; "@core/*" → "./packages/core/src/*"
   vitest.config.ts      ← NO test.include; discovery is "--dir packages" in the scripts
@@ -107,7 +107,7 @@ monorepo/
     src/config/         ← moved from the root
 ```
 
-Diff it against [`npm/`](npm/) — same manager, same runner, so **every difference is the layout**.
+Diff it against [`node-npm/`](node-npm/) — same manager, same runner, so **every difference is the layout**.
 
 ### The `config` feature is on in all four
 
@@ -118,14 +118,14 @@ floor-guard test exist) but it is not worth *reading*.
 
 ## A note on the `name` field
 
-`package.json` in each example reads `"name": "npm"` / `"pnpm"` / `"bun"` / `"monorepo"`, which is not a
-name anyone would choose. The example's directory name and the generated project name are deliberately
-the same string: generating under a nicer name and renaming afterwards would force `examples:check` to
-reproduce the rename, and any mismatch there would surface as phantom drift. Determinism beat cosmetics
-in a `private: true` package that is never published.
+`package.json` in each example reads `"name": "node-npm"` / `"node-pnpm"` / `"bun"` /
+`"node-npm-monorepo"` — not names anyone would choose. The example's directory name and the generated
+project name are deliberately the same string: generating under a nicer name and renaming afterwards would
+force `examples:check` to reproduce the rename, and any mismatch there would surface as phantom drift.
+Determinism beat cosmetics in a `private: true` package that is never published.
 
 It shows up twice in the workspace example, since the package name is scoped to the project:
-`packages/core/package.json` reads `"@monorepo/core"`. Same reasoning.
+`packages/core/package.json` reads `"@node-npm-monorepo/core"`. Same reasoning.
 
 ## What the diff is for
 

@@ -1,4 +1,4 @@
-# monorepo
+# node-npm-monorepo
 
 A TypeScript project with one quality gate, a coverage floor, a layered
 configuration system, and a set of agent rules under `.claude/` — and no application code, so

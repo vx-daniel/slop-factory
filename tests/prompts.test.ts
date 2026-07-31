@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import nodePlop from 'node-plop'
+import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_FIRST_PACKAGE_NAME,
   PACKAGE_MANAGERS,
@@ -84,9 +84,7 @@ describe('generator prompts', () => {
       | (PromptDescriptor & { default?: unknown })
       | undefined
 
-    expect(pathPrompt?.default, 'the destination prompt must default to the working directory').toBe(
-      '.',
-    )
+    expect(pathPrompt?.default, 'the destination prompt must default to the working directory').toBe('.')
   })
 
   it('offers exactly the project structures the contract declares', async () => {

@@ -97,14 +97,11 @@ export const vitestModule: ProjectModule = {
     return {
       scripts: {
         test: `vitest run${testDiscoveryScope}`,
-        coverage:
-          `vitest run --coverage${testDiscoveryScope} && ` +
-          `${runnerPrefix} scripts/coverage-to-markdown.ts`,
+        coverage: `vitest run --coverage${testDiscoveryScope} && ${runnerPrefix} scripts/coverage-to-markdown.ts`,
         'coverage:readme': `${runnerPrefix} scripts/coverage-to-markdown.ts --readme`,
         // Three openers chained because there is no cross-platform one: xdg-open on Linux, open on
         // macOS, start on Windows. Each fails fast when absent, so the chain lands on the right one.
-        'coverage:open':
-          'xdg-open coverage/index.html || open coverage/index.html || start coverage/index.html',
+        'coverage:open': 'xdg-open coverage/index.html || open coverage/index.html || start coverage/index.html',
       },
       devDependencies: {
         '@vitest/coverage-v8': VITEST_COVERAGE_VERSION,

@@ -1,4 +1,4 @@
-# npm
+# node-pnpm
 
 A TypeScript project with one quality gate, a coverage floor, a layered
 configuration system, and a set of agent rules under `.claude/` — and no application code, so
@@ -10,8 +10,8 @@ Agent-facing detail lives in [CLAUDE.md](CLAUDE.md). Per-subsystem reasoning liv
 ## Quick start
 
 ```bash
-npm install        # also wires the pre-commit hook via the `prepare` script
-npm run check:all  # the gate: Biome → tsc --noEmit → Vitest
+pnpm install        # also wires the pre-commit hook via the `prepare` script
+pnpm run check:all  # the gate: Biome → tsc --noEmit → Vitest
 ```
 
 Both should pass on a clean clone.
@@ -25,14 +25,14 @@ cp config.local.toml.example config.local.toml    # optional; only if you need o
 
 | Command | Purpose |
 |---|---|
-| `npm run check:all` | The gate. Run this before declaring any change done. |
-| `npm run lint` / `lint:fix` | Biome check / autofix. |
-| `npm run format` | Biome format, writing changes. |
-| `npm run typecheck` | `tsc --noEmit`. |
-| `npm run test` | `vitest run`. |
-| `npm run coverage` | Coverage + regenerate `COVERAGE.md`. Enforces the 85% floor. |
-| `npm run coverage:open` | Open the HTML coverage report. |
-| `npm run coverage:readme` | Update the totals block in this README. |
+| `pnpm run check:all` | The gate. Run this before declaring any change done. |
+| `pnpm run lint` / `lint:fix` | Biome check / autofix. |
+| `pnpm run format` | Biome format, writing changes. |
+| `pnpm run typecheck` | `tsc --noEmit`. |
+| `pnpm run test` | `vitest run`. |
+| `pnpm run coverage` | Coverage + regenerate `COVERAGE.md`. Enforces the 85% floor. |
+| `pnpm run coverage:open` | Open the HTML coverage report. |
+| `pnpm run coverage:readme` | Update the totals block in this README. |
 
 ## How the pieces fit
 
@@ -138,7 +138,7 @@ Whichever you pick, add the output directory to `.gitignore` (`dist/` is pre-dec
   sessions), not your code. A rule pointing at a module that does not exist actively misleads agents.
 - [ ] **Replace the example config** and its tests (`src/config/*.test.ts`) as you define your real
   schema. Note the 85% floor is live: the first source file you add without a test fails
-  `npm run coverage`. That is intended.
+  `pnpm run coverage`. That is intended.
 - [ ] **Delete the four Viaanix-specific workflows** if this repo is not in that org —
   `claude-pr-review.yml`, `claude-issue-agent.yml`, `secret-scan.yml`, `test-audit.yml`. They
   delegate to `Viaanix/vx-repo-tools` and cannot resolve elsewhere. `ci.yml` and
@@ -151,7 +151,7 @@ Whichever you pick, add the output directory to `.gitignore` (`dist/` is pre-dec
 
 <!-- COVERAGE-START -->
 
-_No coverage recorded yet. Run `npm run coverage` to generate it._
+_No coverage recorded yet. Run `pnpm run coverage` to generate it._
 
 <!-- COVERAGE-END -->
 

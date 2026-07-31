@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import nodePlop from 'node-plop'
-import { resolvePlopfilePath } from '../plopfile-path.js'
 import type { PackageManager, ProjectStructure, TestRunner } from '../modules/module-contract.js'
+import { resolvePlopfilePath } from '../plopfile-path.js'
 
 /**
  * Resolved at MODULE LOAD, not per call — so importing this helper throws if the factory has not been
@@ -56,19 +56,13 @@ export async function generateProject(request: GenerationRequest): Promise<strin
     testRunner: request.testRunner,
     // Passed through only when supplied, so an unset value takes the same path a prompt-driven run does
     // rather than a test-only one. `toProjectAnswers` applies the defaults.
-    ...(request.projectStructure === undefined
-      ? {}
-      : { projectStructure: request.projectStructure }),
-    ...(request.firstPackageName === undefined
-      ? {}
-      : { firstPackageName: request.firstPackageName }),
+    ...(request.projectStructure === undefined ? {} : { projectStructure: request.projectStructure }),
+    ...(request.firstPackageName === undefined ? {} : { firstPackageName: request.firstPackageName }),
     enableFeatures: [...request.enableFeatures],
   })
 
   if (result.failures.length > 0) {
-    const described = result.failures
-      .map((failure) => `${failure.type}: ${failure.error ?? failure.path}`)
-      .join('\n')
+    const described = result.failures.map((failure) => `${failure.type}: ${failure.error ?? failure.path}`).join('\n')
     throw new Error(`generation failed:\n${described}`)
   }
 
@@ -123,10 +117,7 @@ export function isPackageManagerAvailable(packageManager: PackageManager): boole
  * because git applies the LAST matching rule. Reordering those two lines silently stops committing the
  * one config file that must be committed, and no amount of grepping the file catches it.
  */
-export function isIgnoredByGit(options: {
-  readonly filePath: string
-  readonly workingDirectory: string
-}): boolean {
+export function isIgnoredByGit(options: { readonly filePath: string; readonly workingDirectory: string }): boolean {
   return (
     spawnSync('git', ['check-ignore', '--quiet', options.filePath], {
       cwd: options.workingDirectory,

@@ -1,9 +1,4 @@
-import type {
-  PackageJsonFragment,
-  ProjectAnswers,
-  ProjectModule,
-  RenderedTemplate,
-} from '../module-contract.js'
+import type { PackageJsonFragment, ProjectAnswers, ProjectModule, RenderedTemplate } from '../module-contract.js'
 import { WORKSPACE_PACKAGES_DIRECTORY } from '../module-contract.js'
 
 /**

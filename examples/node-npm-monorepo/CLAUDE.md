@@ -1,4 +1,4 @@
-# CLAUDE.md — monorepo
+# CLAUDE.md — node-npm-monorepo
 
 Generated from the project factory. This file describes **this project**, not the factory — if you
 find factory or "blueprint" framing anywhere in this repo, that is a stale file and a bug worth

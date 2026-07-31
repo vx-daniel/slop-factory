@@ -1,18 +1,21 @@
 {
-  "name": "npm",
+  "name": "node-npm-monorepo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "check:all": "node --import tsx scripts/gate.ts",
-    "coverage": "vitest run --coverage && node --import tsx scripts/coverage-to-markdown.ts",
+    "coverage": "vitest run --coverage --dir packages && node --import tsx scripts/coverage-to-markdown.ts",
     "coverage:open": "xdg-open coverage/index.html || open coverage/index.html || start coverage/index.html",
     "coverage:readme": "node --import tsx scripts/coverage-to-markdown.ts --readme",
     "format": "biome format --write",
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "prepare": "git config core.hooksPath .githooks || true",
-    "test": "vitest run",
+    "test": "vitest run --dir packages",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

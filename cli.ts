@@ -32,11 +32,7 @@ function isPromptInterruption(error: unknown): boolean {
     return false
   }
   const { name, code, message } = error as { name?: string; code?: string; message?: string }
-  return (
-    name === 'ExitPromptError' ||
-    code === 'ERR_USE_AFTER_CLOSE' ||
-    (message ?? '').includes('User force closed')
-  )
+  return name === 'ExitPromptError' || code === 'ERR_USE_AFTER_CLOSE' || (message ?? '').includes('User force closed')
 }
 
 const USAGE = `slop-factory — assemble a new TypeScript project from composable modules
