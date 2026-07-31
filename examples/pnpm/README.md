@@ -49,9 +49,9 @@ detects its own package manager, so it works under npm, pnpm, yarn, and Bun alik
 does not prove the behaviour is right. Run the affected path and look at the output.
 
 **One coverage floor, all four metrics.** 85% on lines, branches, functions, and statements. A split
-floor is where coverage theatre hides. `coverage.include` measures every file under `src/`, not only
-the ones a test imported — otherwise a module with zero tests is simply absent from the report and
-the percentage looks healthy.
+floor is where coverage theatre hides. `coverage.include` measures every file matching
+`src/**/*.ts`, not only the ones a test imported — otherwise a module with zero tests is
+simply absent from the report and the percentage looks healthy.
 
 **`*.io.ts` keeps that floor honest.** A hard floor pushes you toward one of two bad outcomes when
 you hit genuine boundary glue: lower the floor, or write fig-leaf tests asserting a mock was called.
@@ -109,9 +109,9 @@ validation, inferred types, secrets by env-var name.
 
 ## Path aliases
 
-`@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` rather than
-`../../../orders/store.js` — and survives the importing file being moved. The `.js` extension is
-still required (ESM + `NodeNext`); it resolves to the `.ts` source.
+`@/*` maps to `./src/*`, so a deep import reads
+`@/orders/store.js` rather than `../../../orders/store.js` — and survives the importing file
+being moved. The `.js` extension is still required (ESM + `NodeNext`); it resolves to the `.ts` source.
 
 `tsconfig.json`'s `paths` is the **single source of truth**. Three consumers read it rather than
 restating it: `tsc` directly, Vitest via `resolve.tsconfigPaths`, and the runtime via

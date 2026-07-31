@@ -40,9 +40,9 @@ and look at the output. This is the rule most often skipped, including by agents
   published field name, the spec term.
 - **Coverage** — `vitest.config.ts` sets an 85% floor on **all four** metrics. A split floor (lines
   85 / branches 60) is where coverage theatre hides: a suite can post a high line number while
-  leaving most decision paths unexercised. `coverage.include` measures every file under `src/`, not
-  only the ones a test imported — without it a module with zero tests is absent from the report
-  rather than showing 0%.
+  leaving most decision paths unexercised. `coverage.include` measures every file matching
+  `packages/*/src/**/*.ts`, not only the ones a test imported — without it a module with zero tests is
+  absent from the report rather than showing 0%.
 - **`*.io.ts` is the escape valve that keeps the floor honest.** Name a file `*.io.ts` and it is
   excluded from the metric, on one condition: **it contains no branching and no computation.** It is
   for boundary glue — process bootstrap, a handler that only wires request → pure function →
@@ -59,9 +59,10 @@ and look at the output. This is the rule most often skipped, including by agents
   defaults), `config.local.toml` (gitignored, machine-specific), `.env` (gitignored, **secrets
   only**). The first two deep-merge **key by key** and validate together; the third never enters the
   config object. Secrets are referenced **by variable name** via `apiKeyEnv` and read at the point of
-  use, so a config dump, a log line, or a serialized error cannot leak one. `src/config/config-schema.ts`
-  is the strict Zod contract with **no I/O** (it unit-tests against plain objects, no fixtures);
-  `src/config/config.ts` does find → merge → validate with the filesystem and environment injected.
+  use, so a config dump, a log line, or a serialized error cannot leak one.
+  `packages/core/src/config/config-schema.ts` is the strict Zod contract with **no I/O** (it
+  unit-tests against plain objects, no fixtures); `packages/core/src/config/config.ts` does
+  find → merge → validate with the filesystem and environment injected.
   Use `getConfig()`, never a module-level `const` — a top-level `export const config = loadConfig()`
   makes merely *importing* the module touch the filesystem, forcing real TOML on disk into every test
   that transitively imports it.
@@ -88,7 +89,9 @@ Absent by design. Do not treat these as gaps to fill unless this project needs t
   `scripts/gate.ts` — that is what broke `bun scripts/gate.ts` with
   `Executable not found in $PATH: "npm"`.
 - **TypeScript 7**, `strict: true`, typecheck-only.
-- **Path aliases**: `@/*` → `src/*`. `tsconfig.json`'s `paths` is the **single source of truth** —
+- **Path aliases**: `@core/*` → `./packages/core/src/*`. One entry per
+  package, so adding a package means adding an alias — see `docs/monorepo.md`. `tsconfig.json`'s
+  `paths` is the **single source of truth** —
   tsc reads it directly, Vitest via `resolve.tsconfigPaths`, runtime via tsx.
   Add an alias there and all consumers follow; never restate the mapping elsewhere. There is
   deliberately no `baseUrl` (deprecated, stops working in TS 7).

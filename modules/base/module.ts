@@ -1,4 +1,10 @@
-import type { PackageJsonFragment, ProjectModule, RenderedTemplate } from '../module-contract.js'
+import {
+  type PackageJsonFragment,
+  pathVocabulary,
+  type ProjectAnswers,
+  type ProjectModule,
+  type RenderedTemplate,
+} from '../module-contract.js'
 
 const NODE_TYPES_VERSION = '^24.10.1'
 
@@ -33,6 +39,19 @@ export const baseModule: ProjectModule = {
 
   isSelected(): boolean {
     return true
+  },
+
+  /**
+   * The path vocabulary its own prose templates interpolate — see `pathVocabulary`.
+   *
+   * Owned here because base owns `CLAUDE.md.hbs` and `README.md.hbs`, the two documents that tell a
+   * reader where things are. Deliberately NOT owned by the `monorepo` module: these keys have a correct
+   * value under BOTH layouts, and a module that is absent under `single` cannot supply one. `monorepo`
+   * contributes the facts only it knows (`isMonorepo`, `firstPackageName`); base contributes the paths
+   * derived from them.
+   */
+  templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {
+    return pathVocabulary(answers)
   },
 
   /**

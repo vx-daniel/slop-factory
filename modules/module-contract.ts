@@ -161,6 +161,48 @@ export function packageRootRelativePath(answers: {
 }
 
 /**
+ * The path vocabulary every prose template interpolates instead of hardcoding `src/`.
+ *
+ * WHY THIS EXISTS. `CLAUDE.md` and `README.md` are written FOR the reader of a generated project, and both
+ * tell that reader where things are — where the config module lives, what the import alias maps to, what
+ * coverage measures. Under a workspace every one of those answers changes.
+ *
+ * Found the hard way: the monorepo layout shipped with both documents still saying `@/*` → `src/*` and
+ * pointing at `src/config/config.ts`. The project worked; its own documentation directed an agent to paths
+ * that did not exist, which is worse than no documentation because it reads as authoritative.
+ *
+ * Returning the strings rather than a boolean keeps the templates readable — `{{sourceDirectory}}` in
+ * prose, instead of an `{{#if isMonorepo}}` around every sentence that mentions a path. Nine references
+ * across the two documents was the count that made that decision obvious.
+ */
+export function pathVocabulary(answers: {
+  readonly projectStructure: ProjectStructure
+  readonly firstPackageName: string
+}): Readonly<Record<string, string>> {
+  const isMonorepoLayout = answers.projectStructure === 'monorepo'
+  const sourceDirectory = isMonorepoLayout
+    ? `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}/src`
+    : 'src'
+
+  return {
+    /** Where the package's source lives, relative to the project root. */
+    sourceDirectory,
+    /** The alias pattern as it appears in tsconfig `paths`, e.g. `@/*` or `@core/*`. */
+    importAliasPattern: isMonorepoLayout ? `@${answers.firstPackageName}/*` : '@/*',
+    /** What that pattern resolves to, written as it appears in tsconfig. */
+    importAliasTarget: `./${sourceDirectory}/*`,
+    /** An example aliased import, for prose that shows one. */
+    exampleAliasedImport: isMonorepoLayout
+      ? `@${answers.firstPackageName}/orders/store.js`
+      : '@/orders/store.js',
+    /** The glob coverage measures, matching what the runner config actually sets. */
+    coverageSourceGlob: isMonorepoLayout
+      ? `${WORKSPACE_PACKAGES_DIRECTORY}/*/src/**/*.ts`
+      : 'src/**/*.ts',
+  }
+}
+
+/**
  * The test runners a generated project can use.
  *
  * Only meaningful when the manager is `bun` — `bun test` ships with the Bun runtime and does not exist
