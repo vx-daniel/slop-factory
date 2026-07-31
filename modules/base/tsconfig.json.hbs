@@ -16,12 +16,12 @@
     "types": [{{#if usesVitest}}"node"{{else}}"node", "bun"{{/if}}],
 
 {{#if isMonorepo}}
-    // Path aliases, one per package. `@{{firstPackageName}}/*` maps into that package's `src`, so a
-    // cross-package import reads `@{{firstPackageName}}/orders/store.js` rather than a relative path
-    // climbing out of one package and into another.
+    // Path aliases, ONE PER PACKAGE — every package named at generation time already has its entry
+    // below. `@<package>/*` maps into that package's `src`, so a cross-package import reads
+    // `{{exampleAliasedImport}}` rather than a relative path climbing out of one package and into another.
     //
-    // ADDING A PACKAGE MEANS ADDING AN ENTRY HERE. That is the cost of this approach, chosen over
-    // importing packages by their package.json name (`@scope/{{firstPackageName}}/...`). The trade:
+    // ADDING A PACKAGE LATER MEANS ADDING AN ENTRY HERE. That is the cost of this approach, chosen over
+    // importing packages by their package.json name (`@scope/<package>/...`). The trade:
     // package-name imports need no `paths` upkeep, but they only resolve once the workspace has been
     // installed and linked, and they require each package to declare an `exports` map to expose
     // subpaths. Aliases resolve straight from this file, before any install.
@@ -39,7 +39,9 @@
     //
     // No `baseUrl`: it is deprecated and stops functioning in TypeScript 7 (which this repo pins).
     "paths": {
-      "@{{firstPackageName}}/*": ["./packages/{{firstPackageName}}/src/*"]
+{{#each packageNames}}
+      "@{{this}}/*": ["./packages/{{this}}/src/*"]{{#unless @last}},{{/unless}}
+{{/each}}
     },
 {{else}}
     // Path aliases. `@/*` maps to `src/*`, so a deep import reads `@/orders/store.js` instead of

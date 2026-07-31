@@ -128,7 +128,7 @@ export type ProjectStructure = (typeof PROJECT_STRUCTURES)[number]
 export const DEFAULT_PROJECT_STRUCTURE: ProjectStructure = 'single'
 
 /**
- * The package a generated monorepo starts with.
+ * The package a generated monorepo starts with when the operator names none.
  *
  * `core` rather than the project's own name: a workspace whose first package is named after the repo
  * invites `packages/my-app/` inside `my-app/`, and the second package then has no natural name. `core`
@@ -146,6 +146,34 @@ export const DEFAULT_FIRST_PACKAGE_NAME = 'core'
 export const WORKSPACE_PACKAGES_DIRECTORY = 'packages'
 
 /**
+ * The package that receives every module's `packageSource/` tree — the FIRST one named.
+ *
+ * A workspace may hold several packages, but exactly one of them is the target of the package-relative
+ * copy channel: `copyDestinations` (in `plopfile.ts`) maps `landsIn: 'packageRoot'` to ONE directory, and
+ * a module's `packageSource/` tree is copied there once. Element 0 holds that role, so the choice is
+ * "whichever the operator named first" rather than a rule they cannot see.
+ *
+ * A measured spike (issue #1) confirmed that landing in one package is sufficient rather than a
+ * limitation: one root tsconfig covers `packages/*`, `paths` resolve relative to the DECLARING file, and
+ * `bunfig.toml`'s `root` scopes discovery to the workspace — so a second package can use everything the
+ * first received, including the `bun test` type shim and the coverage-floor guard.
+ *
+ * THROWS on an empty list rather than returning `undefined`. TypeScript cannot express "at least one
+ * element" on a `readonly string[]`, so this is the only place the guarantee can be enforced — and the
+ * failure it prevents is the silent one: `packages/undefined/` written to disk, looking deliberate.
+ */
+export function resolveFirstPackageName(packageNames: readonly string[]): string {
+  const [firstPackageName] = packageNames
+  if (firstPackageName === undefined) {
+    throw new Error(
+      'packageNames is empty, but a monorepo needs at least one package. Every path under packages/ ' +
+        'derives from the first name, so an empty list writes packages/undefined/.',
+    )
+  }
+  return firstPackageName
+}
+
+/**
  * Where a package's own source lands, relative to the project root.
  *
  * Returns `.` for `single`, because the package root and the project root are the same directory there —
@@ -153,12 +181,12 @@ export const WORKSPACE_PACKAGES_DIRECTORY = 'packages'
  */
 export function packageRootRelativePath(answers: {
   readonly projectStructure: ProjectStructure
-  readonly firstPackageName: string
+  readonly packageNames: readonly string[]
 }): string {
   if (answers.projectStructure === 'single') {
     return '.'
   }
-  return `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}`
+  return `${WORKSPACE_PACKAGES_DIRECTORY}/${resolveFirstPackageName(answers.packageNames)}`
 }
 
 /**
@@ -178,20 +206,28 @@ export function packageRootRelativePath(answers: {
  */
 export function pathVocabulary(answers: {
   readonly projectStructure: ProjectStructure
-  readonly firstPackageName: string
+  readonly packageNames: readonly string[]
 }): Readonly<Record<string, string>> {
   const isMonorepoLayout = answers.projectStructure === 'monorepo'
-  const sourceDirectory = isMonorepoLayout ? `${WORKSPACE_PACKAGES_DIRECTORY}/${answers.firstPackageName}/src` : 'src'
+  // Under a workspace these documents describe the FIRST package, because that is where `packageSource/`
+  // lands and therefore the only package guaranteed to have source at all — see `resolveFirstPackageName`.
+  // Every package gets its own tsconfig alias, but the prose shows one example, and pointing a reader at a
+  // package that holds nothing but a `package.json` is worse than showing the one that holds code.
+  const documentedPackageName = isMonorepoLayout ? resolveFirstPackageName(answers.packageNames) : undefined
+  const sourceDirectory =
+    documentedPackageName === undefined ? 'src' : `${WORKSPACE_PACKAGES_DIRECTORY}/${documentedPackageName}/src`
+  /** The alias prefix before the `/*`: `@core` under a workspace, a bare `@` otherwise. */
+  const aliasScope = documentedPackageName === undefined ? '@' : `@${documentedPackageName}`
 
   return {
     /** Where the package's source lives, relative to the project root. */
     sourceDirectory,
     /** The alias pattern as it appears in tsconfig `paths`, e.g. `@/*` or `@core/*`. */
-    importAliasPattern: isMonorepoLayout ? `@${answers.firstPackageName}/*` : '@/*',
+    importAliasPattern: `${aliasScope}/*`,
     /** What that pattern resolves to, written as it appears in tsconfig. */
     importAliasTarget: `./${sourceDirectory}/*`,
     /** An example aliased import, for prose that shows one. */
-    exampleAliasedImport: isMonorepoLayout ? `@${answers.firstPackageName}/orders/store.js` : '@/orders/store.js',
+    exampleAliasedImport: `${aliasScope}/orders/store.js`,
     /** The glob coverage measures, matching what the runner config actually sets. */
     coverageSourceGlob: isMonorepoLayout ? `${WORKSPACE_PACKAGES_DIRECTORY}/*/src/**/*.ts` : 'src/**/*.ts',
   }
@@ -242,13 +278,24 @@ export interface ProjectAnswers {
   /** Which layout to generate. Decides where package source lands — see `packageRootRelativePath`. */
   readonly projectStructure: ProjectStructure
   /**
-   * The one package a generated monorepo starts with, e.g. `core`.
+   * The packages a generated monorepo starts with, in the order the operator named them, e.g.
+   * `['core', 'api']`. Element 0 additionally receives every module's `packageSource/` tree — see
+   * `resolveFirstPackageName`.
    *
-   * Carried even under `single`, where it is unused, rather than made optional. An optional field would
-   * push a `?? 'core'` fallback into every consumer that builds a package path, and the consumer that
-   * forgot it would silently emit `packages/undefined/`.
+   * NON-EMPTY AND NON-OPTIONAL, both for the same reason, restated here because the plural shape changes
+   * how the guarantee is kept rather than why it matters.
+   *
+   * Carried even under `single`, where it is unused, rather than made optional: an optional field pushes
+   * a `?? ['core']` fallback into every consumer that builds a package path, and the consumer that forgets
+   * emits `packages/undefined/`. That argument survives the rename intact.
+   *
+   * What the rename DOES change is that the type no longer carries the guarantee. `string` could not be
+   * absent; `readonly string[]` can be empty, and an empty list reintroduces exactly the
+   * `packages/undefined/` failure the non-optional field exists to prevent. So the guarantee moved from
+   * the type to two runtime guards: `normalizePackageNames` (in `plopfile.ts`) never returns an empty
+   * list, and `resolveFirstPackageName` throws rather than indexing past the end.
    */
-  readonly firstPackageName: string
+  readonly packageNames: readonly string[]
   /** Values of the opt-in feature checkboxes, e.g. `['config']`. */
   readonly enableFeatures: readonly string[]
 }
@@ -346,12 +393,26 @@ export interface RenderedTemplate {
   /**
    * Destination path relative to the generated project root.
    *
-   * MAY contain Handlebars expressions — plop renders the output path as well as the contents
-   * (`node-plop/src/actions/_common-action-utils.js`, `makeDestPath`). Verified: a path of
-   * `packages/{{firstPackageName}}/package.json` creates the directory under the rendered name. That is
-   * what lets a module emit into a directory whose name is an answer, which a verbatim copy cannot do.
+   * A PLAIN path — build it in TypeScript when it depends on an answer, as the `monorepo` module does for
+   * `packages/<name>/package.json`. plop would also render this string through Handlebars
+   * (`node-plop/src/actions/_common-action-utils.js`, `makeDestPath`), but no module relies on that: a
+   * literal built beside the `data` that fills the template is one fewer indirection for the next reader,
+   * and it cannot silently disagree with the contents.
    */
   readonly outputPath: string
+  /**
+   * Extra data for THIS template only, merged over the shared template data.
+   *
+   * WHY THIS CHANNEL EXISTS. `templateData()` is merged once across all selected modules and every
+   * template sees the same object — which is correct for a flag like `isMonorepo`, and impossible for a
+   * template a module emits SEVERAL times with a different value each time. The workspace layout is that
+   * case: one `package.json` per package, from one `.hbs`, each naming its own package.
+   *
+   * Deliberately narrow. A key here is scoped to a single template, so it needs none of the
+   * conflict-detection `mergeTemplateData` performs — there is no second contributor to disagree with. A
+   * key that two templates both need belongs in `templateData()` instead, where a conflict is caught.
+   */
+  readonly data?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -360,6 +421,11 @@ export interface RenderedTemplate {
  * Conflicts THROW, for the same reason `mergePackageJsonFragments` does: two modules disagreeing about
  * a flag means the rendered output depends on registry order, and the resulting wrong document would
  * look deliberate. An identical value contributed twice is fine.
+ *
+ * "Identical" is `!==`, so it means IDENTICAL REFERENCE for an array or object value. `monorepo` is the
+ * only module contributing one (`packageNames`), so nothing false-conflicts today — but a second module
+ * contributing an equal-looking array would be reported as a conflict. That is the safe direction to
+ * fail, and giving the key a single owner is the fix rather than deep comparison.
  */
 export function mergeTemplateData(
   contributions: ReadonlyArray<{ moduleName: string; data: Readonly<Record<string, unknown>> }>,

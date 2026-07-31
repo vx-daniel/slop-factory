@@ -108,23 +108,81 @@ function assertKnownTestRunner(rawTestRunner: unknown): TestRunner {
   return rawTestRunner as TestRunner
 }
 
+/** How the package-names prompt separates one name from the next. */
+const PACKAGE_NAME_SEPARATOR = ','
+
 /**
- * Rejects a first-package name at the PROMPT, so a typo costs one keystroke.
+ * Splits the comma-separated package-names answer, dropping whitespace and empty entries.
  *
- * Duplicates the checks in `normalizeFirstPackageName` on purpose — that one is the backstop for callers
- * that bypass prompts entirely (the example and drift scripts), and throwing there mid-generation is a
- * worse experience than declining the answer here. The rules are stated once, in the message.
+ * Dropping empties is not tidiness — it is the guard against `packages//package.json`. `"core, api,"` and
+ * `"core,,api"` are both things an operator types, and an untrimmed empty segment would become a path
+ * segment with no name. Shared by the prompt validator and the normalizer so the two cannot disagree
+ * about what the operator typed.
  */
-function validateFirstPackageName(rawName: string): true | string {
-  const packageName = rawName.trim()
-  if (packageName.length === 0) {
-    return 'Package name cannot be empty.'
-  }
+function splitPackageNames(rawAnswer: string): string[] {
+  return rawAnswer
+    .split(PACKAGE_NAME_SEPARATOR)
+    .map((packageName) => packageName.trim())
+    .filter((packageName) => packageName.length > 0)
+}
+
+/**
+ * Rejects a package name that would not be a single directory under `packages/`.
+ *
+ * Returns the reason rather than throwing, so both callers can present it their own way: the prompt
+ * declines the answer, the normalizer throws.
+ */
+function findPackageNameProblem(packageName: string): string | undefined {
   if (packageName.includes('/') || packageName.includes('\\')) {
-    return 'Package name must be a single directory name, not a path.'
+    return `"${packageName}" must be a single directory name, not a path.`
   }
   if (packageName.startsWith('.')) {
-    return 'Package name cannot start with a dot.'
+    return `"${packageName}" cannot start with a dot.`
+  }
+  return undefined
+}
+
+/**
+ * Rejects a repeated name, because two packages cannot share a directory.
+ *
+ * Rejected rather than silently deduplicated, matching how the factory treats every other collision (see
+ * `mergePackageJsonFragments`): a duplicate means the operator meant something the generator cannot
+ * deliver, and quietly producing one package where they asked for two hides it. It also matters
+ * downstream — two identical tsconfig `paths` keys are last-one-wins with no warning from tsc.
+ */
+function findDuplicatePackageName(packageNames: readonly string[]): string | undefined {
+  const seenPackageNames = new Set<string>()
+  for (const packageName of packageNames) {
+    if (seenPackageNames.has(packageName)) {
+      return packageName
+    }
+    seenPackageNames.add(packageName)
+  }
+  return undefined
+}
+
+/**
+ * Rejects the package-names answer at the PROMPT, so a typo costs one keystroke.
+ *
+ * Duplicates the checks in `normalizePackageNames` on purpose — that one is the backstop for callers that
+ * bypass prompts entirely (the example and drift scripts), and throwing there mid-generation is a worse
+ * experience than declining the answer here. Both delegate to the same two predicates, so the rules are
+ * written once even though they are enforced twice.
+ */
+function validatePackageNames(rawAnswer: string): true | string {
+  const packageNames = splitPackageNames(rawAnswer)
+  if (packageNames.length === 0) {
+    return 'Name at least one package.'
+  }
+  for (const packageName of packageNames) {
+    const problem = findPackageNameProblem(packageName)
+    if (problem !== undefined) {
+      return problem
+    }
+  }
+  const duplicateName = findDuplicatePackageName(packageNames)
+  if (duplicateName !== undefined) {
+    return `"${duplicateName}" is named twice — two packages cannot share a directory.`
   }
   return true
 }
@@ -149,28 +207,51 @@ function assertKnownProjectStructure(rawStructure: unknown): ProjectStructure {
 }
 
 /**
- * Normalizes the first package's name, falling back to the default when absent.
+ * Normalizes the package names, falling back to the default when none were given.
  *
- * Unlike the guards above this does NOT throw on a missing value: the prompt that produces it is asked
- * only for a monorepo, so under `single` there is legitimately no answer and the field is meaningless. It
+ * ACCEPTS TWO SHAPES, because it has two kinds of caller. The prompt produces one comma-separated STRING,
+ * which is the only repeat-free form inquirer offers (plop exposes `input`, `list` and `checkbox` — none
+ * of them repeat until blank). The example and drift scripts, and the test harness, call `runActions`
+ * directly and pass an ARRAY, which is the shape they already hold.
+ *
+ * NEVER RETURNS AN EMPTY LIST. That is the load-bearing part: `ProjectAnswers.packageNames` is typed
+ * `readonly string[]`, which cannot express "at least one", so this function and `resolveFirstPackageName`
+ * are the two places the guarantee is kept. An empty answer means "the operator pressed Enter", not "zero
+ * packages", and the default is what they asked for.
+ *
+ * Unlike the `assertKnown*` guards this does NOT throw on a missing value: the prompt that produces it is
+ * asked only for a monorepo, so under `single` there is legitimately no answer and the field is unused. It
  * does reject a value that would build a broken path: a package name is one directory segment, and letting
  * `packages/../..` through `path.join` is how a generator writes outside its own destination.
  */
-function normalizeFirstPackageName(rawPackageName: unknown): string {
-  if (rawPackageName === undefined || rawPackageName === null) {
-    return DEFAULT_FIRST_PACKAGE_NAME
+function normalizePackageNames(rawPackageNames: unknown): readonly string[] {
+  const packageNames = Array.isArray(rawPackageNames)
+    ? rawPackageNames.map((packageName) => String(packageName).trim()).filter((packageName) => packageName.length > 0)
+    : splitPackageNames(rawPackageNames === undefined || rawPackageNames === null ? '' : String(rawPackageNames))
+
+  if (packageNames.length === 0) {
+    return [DEFAULT_FIRST_PACKAGE_NAME]
   }
-  const packageName = String(rawPackageName).trim()
-  if (packageName.length === 0) {
-    return DEFAULT_FIRST_PACKAGE_NAME
+
+  for (const packageName of packageNames) {
+    const problem = findPackageNameProblem(packageName)
+    if (problem !== undefined) {
+      throw new Error(
+        `packageNames must each be a single directory name: ${problem} ` +
+          'Separators and dot-names would place the package outside packages/.',
+      )
+    }
   }
-  if (packageName.includes('/') || packageName.includes('\\') || packageName.startsWith('.')) {
+
+  const duplicateName = findDuplicatePackageName(packageNames)
+  if (duplicateName !== undefined) {
     throw new Error(
-      `firstPackageName must be a single directory name but was ${JSON.stringify(packageName)}. ` +
-        'Separators and dot-names would place the package outside packages/.',
+      `packageNames repeats ${JSON.stringify(duplicateName)}. Two packages cannot share a directory, ` +
+        'and two identical tsconfig `paths` keys are silently last-one-wins.',
     )
   }
-  return packageName
+
+  return packageNames
 }
 
 /**
@@ -197,7 +278,7 @@ function toProjectAnswers(rawAnswers: Record<string, unknown>): ProjectAnswers {
     // `runActions` directly and legitimately omit it. A prompt answer is always present, so this is not
     // a fallback that can mask a renamed prompt; `assertKnownProjectStructure` throws on anything else.
     projectStructure: assertKnownProjectStructure(rawAnswers.projectStructure ?? DEFAULT_PROJECT_STRUCTURE),
-    firstPackageName: normalizeFirstPackageName(rawAnswers.firstPackageName),
+    packageNames: normalizePackageNames(rawAnswers.packageNames),
     enableFeatures: Array.isArray(rawAnswers.enableFeatures) ? (rawAnswers.enableFeatures as string[]) : [],
   }
 }
@@ -326,15 +407,22 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         ],
       },
       // Asked only for a workspace, because `single` has no packages directory for the answer to name.
-      // A workspace starts with exactly ONE package: generating several would mean guessing what they
-      // are, and adding the second is three steps documented in docs/monorepo.md.
+      //
+      // NAMES, COMMA-SEPARATED — not a count. A count would force the generator to invent `package-2`,
+      // and having to guess names is the reason generating more than one was deferred in the first place.
+      // One `input` is the plainest form available: plop exposes only inquirer's `input`, `list` and
+      // `checkbox`, none of which repeat until blank, and registering a third-party repeat prompt through
+      // `plop.setPrompt` would buy a dependency for prompt ergonomics alone.
+      //
+      // The FIRST name is not merely first: it is where every module's `packageSource/` tree lands. See
+      // `resolveFirstPackageName` for why one recipient is sufficient.
       {
         type: 'input',
-        name: 'firstPackageName',
-        message: 'Name of the first package (created under packages/)',
+        name: 'packageNames',
+        message: 'Names of the packages to create under packages/ (comma-separated)',
         default: DEFAULT_FIRST_PACKAGE_NAME,
         when: (answers): boolean => answers.projectStructure === 'monorepo',
-        validate: validateFirstPackageName,
+        validate: validatePackageNames,
       },
       // ONE question, not two. The manager determines the runtime — see PACKAGE_MANAGERS in
       // module-contract.ts for why modelling them separately was rejected.
@@ -468,14 +556,19 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         // go through Handlebars, which is why they live outside any module's `source/` tree — the two
         // channels stay physically separate so a file cannot be rendered by accident.
         //
-        // `path` is absolute, which plop resolves as-is; it is ALSO rendered, so a module may emit into
-        // a directory named after an answer. `templateFile` is relative to this plopfile.
+        // `path` is absolute, which plop resolves as-is. `templateFile` is relative to this plopfile.
+        //
+        // A template's own `data` is merged OVER the shared data, so a module emitting one template
+        // several times can vary it — the workspace layout does exactly that, one `package.json` per
+        // package from one `.hbs`. Last-write-wins is deliberate and needs no conflict detection here:
+        // the override is scoped to a single template, so there is no second contributor to disagree
+        // with. See `RenderedTemplate.data`.
         ...selectedModules.flatMap((projectModule) =>
           (projectModule.renderedTemplates?.(answers) ?? []).map((template) => ({
             type: 'add',
             path: path.join(destinationDirectory, template.outputPath),
             templateFile: template.templateFile,
-            data: templateData,
+            data: { ...templateData, ...template.data },
           })),
         ),
       ]

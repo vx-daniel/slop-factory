@@ -47,7 +47,7 @@ export const baseModule: ProjectModule = {
    * Owned here because base owns `CLAUDE.md.hbs` and `README.md.hbs`, the two documents that tell a
    * reader where things are. Deliberately NOT owned by the `monorepo` module: these keys have a correct
    * value under BOTH layouts, and a module that is absent under `single` cannot supply one. `monorepo`
-   * contributes the facts only it knows (`isMonorepo`, `firstPackageName`); base contributes the paths
+   * contributes the facts only it knows (`isMonorepo`, `packageNames`); base contributes the paths
    * derived from them.
    */
   templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {

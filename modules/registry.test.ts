@@ -59,7 +59,7 @@ function toFullAnswers(answers: (typeof REACHABLE_ANSWERS)[number]): ProjectAnsw
   return {
     projectName: 'example',
     projectPath: '/tmp',
-    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+    packageNames: [DEFAULT_FIRST_PACKAGE_NAME],
     ...answers,
   }
 }

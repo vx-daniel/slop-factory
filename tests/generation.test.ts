@@ -173,7 +173,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
    * Derived rather than branched on, so an assertion about a package-relative file reads the same for
    * both layouts. `.` under `single`, so `path.join` collapses it away.
    */
-  const packageRoot = packageRootRelativePath({ projectStructure, firstPackageName: DEFAULT_FIRST_PACKAGE_NAME })
+  const packageRoot = packageRootRelativePath({ projectStructure, packageNames: [DEFAULT_FIRST_PACKAGE_NAME] })
 
   /**
    * The answer object the modules see — used to derive expectations rather than restating them.
@@ -187,7 +187,7 @@ describe.each(COMBINATIONS)('$label', (combination) => {
     packageManager,
     testRunner,
     projectStructure,
-    firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+    packageNames: [DEFAULT_FIRST_PACKAGE_NAME],
     enableFeatures,
   }
 
