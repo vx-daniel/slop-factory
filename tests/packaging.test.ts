@@ -96,7 +96,7 @@ const REACHABLE_ANSWERS: readonly ProjectAnswers[] = PROJECT_STRUCTURES.flatMap(
       // entirely, so nothing checked whether it reaches the published tarball. That is the same
       // publish-surface gap that shipped two deleted workflows and an unwired template before it.
       projectStructure,
-      firstPackageName: DEFAULT_FIRST_PACKAGE_NAME,
+      packageNames: [DEFAULT_FIRST_PACKAGE_NAME],
       enableFeatures: ['config'],
     })),
   ),

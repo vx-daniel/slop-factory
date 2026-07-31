@@ -35,7 +35,7 @@ Four axes, assembled from eleven composable modules:
 |---|---|
 | Package manager | **npm**, **pnpm**, or **bun** — which also decides the runtime |
 | Test runner | **Vitest**, or **`bun test`** (offered only for bun, since it ships with the runtime) |
-| Layout | **single package**, or a **monorepo** workspace under `packages/` |
+| Layout | **single package**, or a **monorepo** workspace of one or more packages under `packages/` |
 | Features | layered config, Claude workflows |
 
 yarn is not offered. The generated gate's `detectPackageManager()` recognises it, so a project can be
@@ -75,8 +75,8 @@ See [examples/README.md](examples/README.md) — including why you must not `npm
 ## Prompts, in order
 
 Project name (also the directory name), destination directory (**defaults to `.`**, must already exist),
-layout, **first package name** (monorepo only, defaults to `core`), package manager, **test runner** (bun
-only), then optional features.
+layout, **package names** (monorepo only — comma-separated, defaults to `core`), package manager,
+**test runner** (bun only), then optional features.
 
 Nothing is written until every question is answered, and it refuses to generate into a non-empty
 directory — so accepting every default puts the project in a new subdirectory of wherever you ran it.
@@ -107,7 +107,6 @@ one place to change it. The summaries below are pointers, not the record.
 
 | # | Limitation | Effect |
 |---|---|---|
-| [#1](https://github.com/vx-daniel/slop-factory/issues/1) | A workspace starts with exactly one package | The prompt asks for one package name; adding a second is three manual steps, documented in the generated `docs/monorepo.md`. Generating several would mean guessing what they are. |
 | [#2](https://github.com/vx-daniel/slop-factory/issues/2) | `generate` has no non-interactive mode | Requires a TTY; cannot run in CI or from a script |
 | [#3](https://github.com/vx-daniel/slop-factory/issues/3) | `bun + vitest` gets no `coverage-main.yml` | `COVERAGE.md` must be refreshed locally with `coverage:readme` |
 | [#4](https://github.com/vx-daniel/slop-factory/issues/4) | Package metadata is not publish-ready | No `repository` field — npm needs it for provenance; blocks the first `npm publish` |

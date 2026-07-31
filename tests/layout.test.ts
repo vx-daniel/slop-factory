@@ -57,11 +57,11 @@ describe('packageRootRelativePath', () => {
   it('collapses to the project root for a single-package layout', () => {
     // `.` rather than an empty string, because `path.join(destination, '')` and
     // `path.join(destination, '.')` both yield the destination but only one of them is a valid path.
-    expect(packageRootRelativePath({ projectStructure: 'single', firstPackageName: 'core' })).toBe('.')
+    expect(packageRootRelativePath({ projectStructure: 'single', packageNames: ['core'] })).toBe('.')
   })
 
   it('points into the workspace directory for a monorepo layout', () => {
-    expect(packageRootRelativePath({ projectStructure: 'monorepo', firstPackageName: 'core' })).toBe(
+    expect(packageRootRelativePath({ projectStructure: 'monorepo', packageNames: ['core'] })).toBe(
       `${WORKSPACE_PACKAGES_DIRECTORY}/core`,
     )
   })
@@ -69,8 +69,23 @@ describe('packageRootRelativePath', () => {
   it('uses the given package name rather than a fixed one', () => {
     // A hardcoded `core` here would pass every other assertion in this file, because `core` is also the
     // default — so this is the one that would catch it.
-    expect(packageRootRelativePath({ projectStructure: 'monorepo', firstPackageName: 'billing' })).toBe(
+    expect(packageRootRelativePath({ projectStructure: 'monorepo', packageNames: ['billing'] })).toBe(
       `${WORKSPACE_PACKAGES_DIRECTORY}/billing`,
+    )
+  })
+
+  it('takes the FIRST of several packages, because that is where packageSource lands', () => {
+    expect(packageRootRelativePath({ projectStructure: 'monorepo', packageNames: ['billing', 'core'] })).toBe(
+      `${WORKSPACE_PACKAGES_DIRECTORY}/billing`,
+    )
+  })
+
+  it('refuses an empty package list rather than writing packages/undefined', () => {
+    // The type is `readonly string[]`, which cannot express "at least one" — so this throw is where the
+    // guarantee actually lives. Without it the generator writes a directory literally named `undefined`
+    // and reports success, which is the exact failure the non-optional field was introduced to prevent.
+    expect(() => packageRootRelativePath({ projectStructure: 'monorepo', packageNames: [] })).toThrow(
+      /at least one package/,
     )
   })
 })
@@ -318,6 +333,87 @@ describe('single layout — no workspace vocabulary leaks in', () => {
   })
 })
 
+describe('monorepo layout with several packages', () => {
+  /** Deliberately not alphabetical, so an assertion cannot pass by sorting. */
+  const PACKAGE_NAMES = ['core', 'api', 'worker'] as const
+
+  let projectDirectory: string
+
+  beforeAll(async () => {
+    projectDirectory = await generateProject({
+      projectName: 'monorepo-many',
+      workspaceDirectory,
+      packageManager: 'npm',
+      testRunner: 'vitest',
+      projectStructure: 'monorepo',
+      packageNames: [...PACKAGE_NAMES],
+      enableFeatures: [...CONFIG_FEATURE],
+    })
+  })
+
+  it('makes every named package a workspace member', async () => {
+    // A directory under packages/ without a package.json is not a member: the manager ignores it, so the
+    // root lockfile and the root devDependencies silently do not apply to it.
+    for (const packageName of PACKAGE_NAMES) {
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, packageName, 'package.json'), 'utf8'),
+      ) as { name: string }
+
+      expect(packageJson.name, `packages/${packageName} was not given its own identity`).toBe(
+        `@monorepo-many/${packageName}`,
+      )
+    }
+  })
+
+  it('gives every package its own tsconfig alias', async () => {
+    const tsconfig = await readFile(path.join(projectDirectory, 'tsconfig.json'), 'utf8')
+
+    for (const packageName of PACKAGE_NAMES) {
+      expect(tsconfig, `no alias for packages/${packageName}`).toContain(
+        `"@${packageName}/*": ["./${WORKSPACE_PACKAGES_DIRECTORY}/${packageName}/src/*"]`,
+      )
+    }
+  })
+
+  it('writes a tsconfig that still parses with several aliases', async () => {
+    // THE assertion the `{{#each}}` needed. A missing separator between entries produces a file that
+    // reads plausibly and is not JSON at all — and `tsc` reporting a malformed tsconfig points at the
+    // file, not at the template that wrote it. Comments are stripped first because this is JSONC — the
+    // stripper assumes WHOLE-LINE comments, which is what the template writes today. A future trailing
+    // `// …` after a value would break the parse here and point at this test rather than the template.
+    //
+    // MUTATION-TESTED: deleting `{{#unless @last}},{{/unless}}` from `modules/base/tsconfig.json.hbs`
+    // fails this test and only this test. It parses the DATA rather than matching text, so the comment
+    // block above the `paths` entries — which legitimately names aliases while explaining them — cannot
+    // satisfy it. See .claude/rules/asserting-on-file-content.md.
+    const tsconfig = await readFile(path.join(projectDirectory, 'tsconfig.json'), 'utf8')
+    const withoutLineComments = tsconfig
+      .split('\n')
+      .filter((line) => !/^\s*\/\//.test(line))
+      .join('\n')
+
+    const parsed = JSON.parse(withoutLineComments) as { compilerOptions: { paths: Record<string, string[]> } }
+
+    expect(Object.keys(parsed.compilerOptions.paths)).toEqual(PACKAGE_NAMES.map((packageName) => `@${packageName}/*`))
+  })
+
+  it('lands packageSource in the first package only', async () => {
+    // One recipient is by design — `copyDestinations` maps `packageRoot` to a single directory. The spike
+    // in issue #1 measured that this is sufficient: one root tsconfig, `paths` resolved from the declaring
+    // file, and workspace-scoped discovery mean a second package can use what the first received.
+    expect(await exists(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, 'core', PACKAGE_RELATIVE_FILE))).toBe(
+      true,
+    )
+
+    for (const packageName of ['api', 'worker']) {
+      expect(
+        await exists(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, packageName, PACKAGE_RELATIVE_FILE)),
+        `${PACKAGE_RELATIVE_FILE} was copied into packages/${packageName} as well as the first package`,
+      ).toBe(false)
+    }
+  })
+})
+
 describe('monorepo layout with a named package', () => {
   it('honours a first package name other than the default', async () => {
     const namedPackage = 'billing'
@@ -327,7 +423,7 @@ describe('monorepo layout with a named package', () => {
       packageManager: 'npm',
       testRunner: 'vitest',
       projectStructure: 'monorepo',
-      firstPackageName: namedPackage,
+      packageNames: [namedPackage],
       enableFeatures: [...CONFIG_FEATURE],
     })
 
@@ -439,10 +535,69 @@ describe('answer validation', () => {
         packageManager: 'npm',
         testRunner: 'vitest',
         projectStructure: 'monorepo',
-        firstPackageName: '../../etc',
+        packageNames: ['../../etc'],
         enableFeatures: [],
       }),
     ).rejects.toThrow(/single directory name/)
+  })
+
+  it('rejects a comma inside a single array element', async () => {
+    // THE BUG THIS GUARDS, found in review. `normalizePackageNames` takes two shapes: the prompt's
+    // comma-separated STRING, which is split, and a caller's ARRAY, which is not. So an array element that
+    // itself contains a comma was never split and never rejected — `['core,api']` generated a directory
+    // named `core,api`, an npm name of `@project/core,api`, and an alias of `@core,api/*`. Three invalid
+    // artifacts, written silently, with a green generation run.
+    //
+    // Reachable only from an array caller, which is why the fix lives in the predicate BOTH shapes share
+    // rather than in the split that only one of them goes through.
+    await expect(
+      generateProject({
+        projectName: 'comma-in-element',
+        workspaceDirectory,
+        packageManager: 'npm',
+        testRunner: 'vitest',
+        projectStructure: 'monorepo',
+        packageNames: ['core,api'],
+        enableFeatures: [],
+      }),
+    ).rejects.toThrow(/separates one name from the next/)
+  })
+
+  it('rejects the same package named twice', async () => {
+    // Checked here as well as at the prompt, because the scripts that call `runActions` directly never
+    // see the prompt validator — and a duplicate reaches disk as one package where two were asked for.
+    await expect(
+      generateProject({
+        projectName: 'duplicate-packages',
+        workspaceDirectory,
+        packageManager: 'npm',
+        testRunner: 'vitest',
+        projectStructure: 'monorepo',
+        packageNames: ['core', 'core'],
+        enableFeatures: [],
+      }),
+    ).rejects.toThrow(/repeats/)
+  })
+
+  it('falls back to the default package when the list is empty', async () => {
+    // Not an error: `single` supplies no answer at all, and the scripts that bypass prompts legitimately
+    // omit it. What must NOT happen is a workspace with zero packages, or one named `undefined`.
+    const projectDirectory = await generateProject({
+      projectName: 'empty-package-list',
+      workspaceDirectory,
+      packageManager: 'npm',
+      testRunner: 'vitest',
+      projectStructure: 'monorepo',
+      packageNames: [],
+      enableFeatures: [],
+    })
+
+    expect(
+      await exists(
+        path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, DEFAULT_FIRST_PACKAGE_NAME, 'package.json'),
+      ),
+    ).toBe(true)
+    expect(await exists(path.join(projectDirectory, WORKSPACE_PACKAGES_DIRECTORY, 'undefined'))).toBe(false)
   })
 
   it('rejects an unknown project structure', async () => {

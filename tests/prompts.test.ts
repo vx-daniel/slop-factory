@@ -26,7 +26,7 @@ const REQUIRED_PROMPT_NAMES = [
   'projectName',
   'projectPath',
   'projectStructure',
-  'firstPackageName',
+  'packageNames',
   'packageManager',
   'testRunner',
   'enableFeatures',
@@ -38,10 +38,29 @@ interface PromptDescriptor {
   readonly choices?: ReadonlyArray<{ value?: unknown }>
 }
 
+/** The fields the package-names prompt is asserted on, beyond the ones every prompt has. */
+interface PackageNamesPromptDescriptor extends PromptDescriptor {
+  readonly when?: (answers: Record<string, unknown>) => boolean
+  readonly default?: unknown
+  readonly validate?: (rawAnswer: string) => true | string
+}
+
 async function loadGeneratorPrompts(): Promise<readonly PromptDescriptor[]> {
   const plop = await nodePlop(resolvePlopfilePath())
   const generator = plop.getGenerator('generate')
   return generator.prompts as readonly PromptDescriptor[]
+}
+
+/**
+ * The package-names prompt, read through the generator rather than imported.
+ *
+ * Its `validate` function is not exported from `plopfile.ts` and deliberately stays that way: reaching the
+ * validator only through the prompt list is what makes these assertions fail when the prompt is renamed or
+ * dropped, which is the failure this whole suite exists to catch.
+ */
+async function findPackageNamesPrompt(): Promise<PackageNamesPromptDescriptor | undefined> {
+  const prompts = await loadGeneratorPrompts()
+  return prompts.find((prompt) => prompt.name === 'packageNames') as PackageNamesPromptDescriptor | undefined
 }
 
 describe('generator prompts', () => {
@@ -100,22 +119,42 @@ describe('generator prompts', () => {
     expect(offeredValues.slice().sort()).toEqual([...PROJECT_STRUCTURES].sort())
   })
 
-  it('asks for the first package name only for a workspace', async () => {
+  it('asks for the package names only for a workspace', async () => {
     // Under `single` there is no packages directory for the answer to name, so the question has exactly
     // one meaningless answer.
-    const prompts = await loadGeneratorPrompts()
-    const packageNamePrompt = prompts.find((prompt) => prompt.name === 'firstPackageName') as
-      | (PromptDescriptor & {
-          when?: (answers: Record<string, unknown>) => boolean
-          default?: unknown
-        })
-      | undefined
+    const packageNamesPrompt = await findPackageNamesPrompt()
 
-    expect(packageNamePrompt, 'the firstPackageName prompt is missing').toBeDefined()
-    expect(typeof packageNamePrompt?.when).toBe('function')
-    expect(packageNamePrompt?.when?.({ projectStructure: 'monorepo' })).toBe(true)
-    expect(packageNamePrompt?.when?.({ projectStructure: 'single' })).toBe(false)
-    expect(packageNamePrompt?.default).toBe(DEFAULT_FIRST_PACKAGE_NAME)
+    expect(packageNamesPrompt, 'the packageNames prompt is missing').toBeDefined()
+    expect(typeof packageNamesPrompt?.when).toBe('function')
+    expect(packageNamesPrompt?.when?.({ projectStructure: 'monorepo' })).toBe(true)
+    expect(packageNamesPrompt?.when?.({ projectStructure: 'single' })).toBe(false)
+    expect(packageNamesPrompt?.default).toBe(DEFAULT_FIRST_PACKAGE_NAME)
+  })
+
+  it('accepts several comma-separated package names', async () => {
+    // The prompt is the ONLY place an interactive operator can ask for more than one package, so a
+    // validator that declined a list would silently cap every generated workspace at one — with the
+    // generator itself perfectly able to produce several.
+    const validate = (await findPackageNamesPrompt())?.validate
+
+    expect(typeof validate).toBe('function')
+    expect(validate?.('core, api, worker')).toBe(true)
+    // Trailing and doubled separators are things people type. They must be dropped rather than becoming
+    // an empty path segment — `packages//package.json`.
+    expect(validate?.('core,,api,')).toBe(true)
+  })
+
+  it('declines names that would not be a single directory under packages/', async () => {
+    const validate = (await findPackageNamesPrompt())?.validate
+
+    // A path separator escapes the workspace directory; a dot-name resolves somewhere else entirely.
+    expect(validate?.('core,../etc')).toMatch(/single directory name/)
+    expect(validate?.('core,.hidden')).toMatch(/dot/)
+    // Rejected rather than deduplicated: two identical tsconfig `paths` keys are silently last-one-wins,
+    // so a generated workspace would have one alias where the operator asked for two packages.
+    expect(validate?.('core,api,core')).toMatch(/named twice/)
+    // Every separator and no name at all is not "zero packages" — it is an answer that cannot be built.
+    expect(validate?.(' , ')).toMatch(/at least one/)
   })
 
   it('asks the test-runner question only for the bun manager', async () => {

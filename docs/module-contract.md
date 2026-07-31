@@ -69,7 +69,7 @@ That is why **no post-copy transform channel was needed**, which this module was
 believing it required. A transform channel could have corrupted any file in the tree; this arrangement
 cannot.
 
-The `monorepo` module publishes only the facts it alone knows (`isMonorepo`, `firstPackageName`). Paths
+The `monorepo` module publishes only the facts it alone knows (`isMonorepo`, `packageNames`). Paths
 *derived* from those facts — `sourceDirectory`, `importAliasPattern`, `coverageSourceGlob` — come from
 `base`, because they have a correct value under **both** layouts and a module absent under `single` cannot
 supply one. See `pathVocabulary` in the contract.

@@ -18,17 +18,15 @@ export interface GenerationRequest {
   readonly workspaceDirectory: string
   readonly packageManager: PackageManager
   readonly testRunner: TestRunner
-  /**
-   * Defaults to `single`, matching what the prompts can produce.
-   *
-   * Supplying `monorepo` here is currently the ONLY way to reach that layout — `toProjectAnswers` forces
-   * `single` for anything coming from a prompt, because the per-module template changes that make a
-   * generated workspace build are not in place yet. So this parameter is what keeps the package-root
-   * plumbing exercised rather than merely written.
-   */
+  /** Defaults to `single`, matching the generator's own default when no answer is supplied. */
   readonly projectStructure?: ProjectStructure
-  /** Defaults to `core`. Only meaningful under `monorepo`. */
-  readonly firstPackageName?: string
+  /**
+   * Defaults to `['core']`. Only meaningful under `monorepo`.
+   *
+   * An ARRAY, not the comma-separated string the prompt produces — `normalizePackageNames` accepts both,
+   * and a caller holding a list should not have to join it only for the generator to split it again.
+   */
+  readonly packageNames?: readonly string[]
   readonly enableFeatures: readonly string[]
 }
 
@@ -57,7 +55,7 @@ export async function generateProject(request: GenerationRequest): Promise<strin
     // Passed through only when supplied, so an unset value takes the same path a prompt-driven run does
     // rather than a test-only one. `toProjectAnswers` applies the defaults.
     ...(request.projectStructure === undefined ? {} : { projectStructure: request.projectStructure }),
-    ...(request.firstPackageName === undefined ? {} : { firstPackageName: request.firstPackageName }),
+    ...(request.packageNames === undefined ? {} : { packageNames: [...request.packageNames] }),
     enableFeatures: [...request.enableFeatures],
   })
 

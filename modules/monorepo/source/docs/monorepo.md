@@ -13,7 +13,16 @@ packages/
   core/
     package.json      ← required: a directory here without one is not a workspace member
     src/
+  api/                ← further packages, if you named more than one at generation time
+    package.json
 ```
+
+**Only the first package is given source.** Every package named at generation time is a real workspace
+member with its own `package.json` and its own `tsconfig.json` alias, but the blueprint's own code — the
+config module, and under `bun test` the type shim and the coverage-floor guard — lands in the **first**
+one. That is sufficient rather than a limitation: there is one `tsconfig.json` for the whole workspace, and
+`paths` resolve relative to the file that declares them, so a second package can import what the first
+received the moment you add a file to it.
 
 ## Dependencies live at the root, with one exception
 
@@ -27,11 +36,13 @@ or extracted.
 
 ## One alias per package
 
-`tsconfig.json` declares an alias per package:
+`tsconfig.json` declares an alias per package — one entry for each package the project was generated
+with:
 
 ```jsonc
 "paths": {
-  "@core/*": ["./packages/core/src/*"]
+  "@core/*": ["./packages/core/src/*"],
+  "@api/*": ["./packages/api/src/*"]
 }
 ```
 
@@ -108,6 +119,9 @@ ratchet only turns up.
 
 ## Adding a package
 
+These are the steps for a package added **after** generation. Packages named at the generator's prompt
+already have steps 2 and 3 done for them.
+
 1. `mkdir -p packages/<name>/src`
 2. Add `packages/<name>/package.json` — copy `packages/core/package.json` and change the name. Without
    it, the directory is not a workspace member and the manager ignores it.
@@ -127,7 +141,7 @@ does not currently have:
 | Caching build outputs | there is no build step — `noEmit`, and `.ts` runs directly |
 | Parallel per-package tasks | `typecheck` is one `tsc --noEmit` over every package — one process |
 | Parallel test runs | one runner invocation already covers every package |
-| A task graph (`dependsOn`) | one package |
+| A task graph (`dependsOn`) | no build step for one package's task to depend on |
 
 There is also a concrete conflict: `scripts/coverage-to-markdown.ts` reads a **single**
 `coverage/coverage-summary.json`. Per-package task runs produce per-package outputs, so adopting one

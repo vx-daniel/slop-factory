@@ -36,22 +36,28 @@ export const monorepoModule: ProjectModule = {
   },
 
   /**
-   * The first package's own `package.json`.
+   * One `package.json` per package, from one template.
    *
    * Required, not decorative: a directory under `packages/` with no `package.json` is not a workspace
    * member, so the manager ignores it and the single-lockfile-at-the-root arrangement silently does not
    * apply to it.
    *
-   * The output path contains an answer, which is the capability the rendered channel has and the copy
-   * channel does not — plop renders destination paths as well as contents.
+   * The output path and the contents both depend on WHICH package this is, and the shared template data
+   * is one object seen by every template — so the name travels in the template's own `data`, the channel
+   * that exists for exactly this case. The path is built here in TypeScript rather than left as a
+   * Handlebars expression, so the directory a file lands in is readable without resolving a template.
+   *
+   * Only the FIRST package receives any source: `packageSource/` lands in one directory (see
+   * `resolveFirstPackageName`). The rest are created as workspace members holding nothing but this file,
+   * which is the same shape a single-package workspace with no optional features already produces, and is
+   * enough for the root tsconfig, the alias, and test discovery to cover them the moment code arrives.
    */
-  renderedTemplates(): readonly RenderedTemplate[] {
-    return [
-      {
-        templateFile: 'modules/monorepo/package-package.json.hbs',
-        outputPath: `${WORKSPACE_PACKAGES_DIRECTORY}/{{firstPackageName}}/package.json`,
-      },
-    ]
+  renderedTemplates(answers: ProjectAnswers): readonly RenderedTemplate[] {
+    return answers.packageNames.map((packageName) => ({
+      templateFile: 'modules/monorepo/package-package.json.hbs',
+      outputPath: `${WORKSPACE_PACKAGES_DIRECTORY}/${packageName}/package.json`,
+      data: { packageName },
+    }))
   },
 
   /**
@@ -60,11 +66,16 @@ export const monorepoModule: ProjectModule = {
    * `isMonorepo` rather than passing `projectStructure` through as a string: Handlebars has no equality
    * helper by default, so `{{#if isMonorepo}}` works while `{{#if (eq projectStructure "monorepo")}}`
    * needs a registered helper. A boolean keeps the templates readable and the failure mode obvious.
+   *
+   * `packageNames` is the whole list rather than the first name, because the one template that reads it —
+   * `tsconfig.json`'s `paths` — needs an entry per package. Templates wanting the first package's paths in
+   * prose read `sourceDirectory` and `importAliasPattern` from `base` instead; those have a correct value
+   * under both layouts, which this module cannot supply because it is absent under `single`.
    */
   templateData(answers: ProjectAnswers): Readonly<Record<string, unknown>> {
     return {
       isMonorepo: true,
-      firstPackageName: answers.firstPackageName,
+      packageNames: answers.packageNames,
       workspacePackagesDirectory: WORKSPACE_PACKAGES_DIRECTORY,
     }
   },
