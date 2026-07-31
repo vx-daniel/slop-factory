@@ -11,17 +11,20 @@ const GENERATION_TIMEOUT_MS = 600_000
 
 export default defineConfig({
   test: {
-    // Two projects, split by COST, because that split decides what gets run habitually.
+    // Five projects, split by COST, because that split decides what gets run habitually. Listed roughly
+    // cheapest-first, and each one's own comment below gives the reason it is separate rather than folded
+    // into the project before it.
     //
-    //   unit       — pure functions, no I/O, milliseconds. This is the package.json merge and render
-    //                logic: the part most likely to regress and the cheapest to check.
-    //   generation — generates real projects, installs them, runs their gate. Minutes. It is the only
-    //                thing that can catch a fragment merge producing a project whose dependencies do
-    //                not satisfy its own scripts, or a file rendered when it should have been copied
-    //                verbatim (Handlebars and GitHub Actions both claim `{{ }}`). Both of those
-    //                install and typecheck cleanly, so nothing cheaper sees them.
+    // The two ends are worth stating here. `unit` is pure functions and no I/O — milliseconds — covering
+    // the package.json merge and render logic, the part most likely to regress and the cheapest to check.
+    // `generation` generates real projects, installs them, and runs their gate: minutes, and the only
+    // thing that can catch a fragment merge producing a project whose dependencies do not satisfy its own
+    // scripts, or a file rendered when it should have been copied verbatim (Handlebars and GitHub Actions
+    // both claim `{{ }}`). Both of those install and typecheck cleanly, so nothing cheaper sees them.
     //
-    // Bundling the fast checks behind the slow ones means nobody runs either.
+    // Bundling the fast checks behind the slow ones means nobody runs either. `docs/verification.md`
+    // tabulates what each suite proves, and `modules/vitest-projects-in-ci.test.ts` asserts that every
+    // project named here is actually reached by the factory's own CI workflow.
     projects: [
       {
         test: {

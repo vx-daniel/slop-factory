@@ -69,17 +69,12 @@ interface Combination {
 }
 
 /**
- * Every combination the prompts can produce — eight of them.
- *
- * `bun-test` appears only under the bun manager because the prompt is skipped for npm and pnpm: `bun
- * test` ships with the Bun runtime and has no Node equivalent. That is what keeps this at eight rather
- * than twelve.
+ * The two feature answers: the checkbox on, and nothing selected.
  *
  * The "no features" rows matter more than they look: with no config module the project has no source
  * code and no tests, which BOTH runners treat as a failure by default — Vitest needs `passWithNoTests`,
  * and `bun test` has no such flag, which is why the bun-test module ships a real test of its own.
  */
-/** The two feature answers: the checkbox on, and nothing selected. */
 const FEATURE_SETS: readonly (readonly string[])[] = [['config'], []]
 
 /**
