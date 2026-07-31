@@ -103,11 +103,9 @@ Absent by design. Do not treat these as gaps to fill unless this project needs t
 
 ## Known caveats — read before relying on these
 
-- **Four workflows are Viaanix-org-specific.** `claude-pr-review.yml`, `claude-issue-agent.yml`,
-  `secret-scan.yml`, and `test-audit.yml` are caller stubs pointing at
-  `Viaanix/vx-repo-tools/.github/workflows/...@v1`. **Outside that org they cannot resolve**, and
-  three of the four also need the org secret `CLAUDE_CODE_OAUTH_TOKEN_TOOLING`. If this project is
-  not in the Viaanix org, delete those four files — `ci.yml` stands alone.
+- **`secret-scan.yml` needs no secret and no setup.** It uses the MIT gitleaks binary and the
+  automatically-provided `github.token`. It scans only a pull request's new commits, never the whole tree,
+  so it is safe to mark as a required check on an existing repository without red-X'ing open work.
 - **Committed agent memory is not auto-loaded.** `.claude/rules/agent-memory.md` describes the
   two-index system, but this repo has no `@import` of the memory index in this file, so committed
   memory is a shared artifact you must open explicitly. Don't write rules or PR text assuming

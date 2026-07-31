@@ -18,10 +18,9 @@ import { generateProject } from './generate-project.js'
  * right directory". File placement is decided entirely by the copy actions, so generating into a temp
  * directory and reading the tree proves it outright.
  *
- * This is also the only suite that exercises the `monorepo` layout at all. `toProjectAnswers` forces
- * `single` for anything a prompt produces, because the per-module template changes that make a generated
- * workspace build are not in place yet — so without these tests the package-root plumbing would be
- * written but unexercised, which is indistinguishable from broken.
+ * It is also where OPT-IN FEATURES are checked. A feature that contributes no dependencies and no scripts —
+ * `claude-workflows` is the case — cannot affect install or the generated gate, so file placement is the
+ * entire surface. Adding it to `generation.test.ts` would double that matrix to gate nothing new.
  */
 
 const CONFIG_FEATURE = ['config'] as const
@@ -341,6 +340,91 @@ describe('monorepo layout with a named package', () => {
       ),
       'the default package name leaked through instead of the supplied one',
     ).toBe(false)
+  })
+})
+
+describe('the claude-workflows feature', () => {
+  /** The three the feature adds. `secret-scan.yml` is NOT here — it ships from base, unconditionally. */
+  const FEATURE_WORKFLOWS = ['claude-pr-review.yml', 'claude-issue-agent.yml', 'test-audit.yml']
+
+  let enabledDirectory: string
+  let disabledDirectory: string
+
+  beforeAll(async () => {
+    enabledDirectory = await generateProject({
+      projectName: 'claude-workflows-on',
+      workspaceDirectory,
+      packageManager: 'npm',
+      testRunner: 'vitest',
+      enableFeatures: ['config', 'claude-workflows'],
+    })
+    disabledDirectory = await generateProject({
+      projectName: 'claude-workflows-off',
+      workspaceDirectory,
+      packageManager: 'npm',
+      testRunner: 'vitest',
+      enableFeatures: ['config'],
+    })
+  })
+
+  it('ships the three workflows and their document when enabled', async () => {
+    for (const workflowName of FEATURE_WORKFLOWS) {
+      await expect(
+        access(path.join(enabledDirectory, '.github', 'workflows', workflowName)),
+        `${workflowName} missing with the feature enabled`,
+      ).resolves.toBeUndefined()
+    }
+    await expect(access(path.join(enabledDirectory, 'docs', 'claude-workflows.md'))).resolves.toBeUndefined()
+  })
+
+  it('ships none of them when disabled', async () => {
+    for (const workflowName of FEATURE_WORKFLOWS) {
+      expect(
+        await exists(path.join(disabledDirectory, '.github', 'workflows', workflowName)),
+        `${workflowName} shipped despite the feature being off`,
+      ).toBe(false)
+    }
+    expect(await exists(path.join(disabledDirectory, 'docs', 'claude-workflows.md'))).toBe(false)
+  })
+
+  it('ships secret-scan either way, because it needs no token', async () => {
+    // The distinction the whole feature split rests on. gitleaks needs no secret, so it belongs in base and
+    // works the moment a project is generated; the three above are inert without a token and so are opt-in.
+    for (const projectDirectory of [enabledDirectory, disabledDirectory]) {
+      await expect(
+        access(path.join(projectDirectory, '.github', 'workflows', 'secret-scan.yml')),
+      ).resolves.toBeUndefined()
+    }
+  })
+
+  it('never mentions the token in a project that declined the feature', async () => {
+    // The original complaint this whole change answers: a generated project should not carry instructions
+    // about a secret it has no use for, nor files it is told to delete.
+    for (const documentName of ['CLAUDE.md', 'README.md']) {
+      const contents = await readFile(path.join(disabledDirectory, documentName), 'utf8')
+      expect(contents, `${documentName} mentions the token without the feature`).not.toContain(
+        'CLAUDE_CODE_OAUTH_TOKEN',
+      )
+    }
+  })
+
+  it('tells a project that enabled it which secret to set', async () => {
+    for (const documentName of ['CLAUDE.md', 'README.md']) {
+      const contents = await readFile(path.join(enabledDirectory, documentName), 'utf8')
+      expect(contents, `${documentName} should name the required secret`).toContain('CLAUDE_CODE_OAUTH_TOKEN')
+    }
+  })
+
+  it('delegates to no external repository', async () => {
+    // These began as thin callers into a private org repo, which is why every generated project used to ship
+    // four files whose own comments told most adopters to delete them.
+    for (const workflowName of [...FEATURE_WORKFLOWS, 'secret-scan.yml']) {
+      const directory = workflowName === 'secret-scan.yml' ? disabledDirectory : enabledDirectory
+      const contents = await readFile(path.join(directory, '.github', 'workflows', workflowName), 'utf8')
+      expect(contents, `${workflowName} still delegates to a reusable workflow`).not.toMatch(
+        /^\s*uses:\s*\S+\/\S+\/\.github\/workflows\//m,
+      )
+    }
   })
 })
 

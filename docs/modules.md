@@ -1,13 +1,13 @@
 # The modules
 
-Ten modules on four axes: two always-on, one of three package managers (plus the runtime it implies), one
+Eleven modules on four axes: two always-on, one of three package managers (plus the runtime it implies), one
 of two test runners, one of two layouts, plus opt-in features.
 
 See [`module-contract.md`](module-contract.md) for how a module contributes, and how to add one.
 
 | Module | Selected when | Owns |
 |---|---|---|
-| `base` | always | tsconfig, `.claude/` rules + skills, pre-commit hook, the org workflow stubs, `@types/node`, the rendered `ci.yml`, the path vocabulary the prose templates interpolate |
+| `base` | always | tsconfig, `.claude/` rules + skills, pre-commit hook, `secret-scan.yml`, `@types/node`, the rendered `ci.yml`, the path vocabulary the prose templates interpolate |
 | `gate` | always | Biome, the naming plugin, TypeScript, `scripts/gate.ts`, the check scripts |
 | `node` | manager is npm or pnpm | Node 24 engine floor, tsx |
 | `npm` | manager = npm | `npm ci`, `package-lock.json`, `npx` |
@@ -17,6 +17,7 @@ See [`module-contract.md`](module-contract.md) for how a module contributes, and
 | `bun-test` | runner = bun-test | `bunfig.toml`, the `vitest` type shim, the floor-guard test |
 | `monorepo` | layout = monorepo | The per-package `package.json`, and the `isMonorepo` vocabulary other modules' templates branch on |
 | `config` | `config` feature | Layered TOML config, Zod schema, the `config/` source tree, `.env.example` |
+| `claude-workflows` | `claude-workflows` feature | Three self-contained Claude workflows: PR review, issue triage, test audit |
 
 ## Which sets are exclusive
 
@@ -48,6 +49,13 @@ fails `tsc --noEmit` under either runtime.
 manager-specific thing a workflow does. The parts that actually vary are the setup steps and the install
 command, so it is one rendered template interpolating vocabulary the manager modules contribute. Three
 near-identical 50-line copies was the alternative.
+
+**`secret-scan.yml` is in `base` but the three Claude workflows are opt-in**, even though all four arrived
+together as organisation stubs. The split is the token: gitleaks needs no secret and works the moment a
+project is generated, so it belongs on by default. The Claude workflows are inert without
+`CLAUDE_CODE_OAUTH_TOKEN`, and ~700 lines of workflow that does nothing until a secret is provisioned reads
+as broken rather than as unconfigured — which is exactly the complaint the old stubs generated, since their
+own comments told most adopters to delete them.
 
 **`coverage-main.yml` is in `vitest`, and its Node-only gate lives in `renderedTemplates()`** rather than
 in a template flag. The file is Vitest-specific — it reads the `json-summary` reporter's output, which

@@ -1,6 +1,7 @@
 import { baseModule } from './base/module.js'
 import { bunModule } from './bun/module.js'
 import { bunTestModule } from './bun-test/module.js'
+import { claudeWorkflowsModule } from './claude-workflows/module.js'
 import { configModule } from './config/module.js'
 import { gateModule } from './gate/module.js'
 import type { ProjectModule } from './module-contract.js'
@@ -53,4 +54,5 @@ export const PROJECT_MODULES: readonly ProjectModule[] = [
   bunTestModule,
   monorepoModule,
   configModule,
+  claudeWorkflowsModule,
 ]

@@ -22,21 +22,19 @@ Every generated project contains this script:
 "prepare": "git config core.hooksPath .githooks || true"
 ```
 
-`git config` writes **repository-level** config regardless of which subdirectory you run it from — and
-these directories are inside the factory's own repository, not separate repos. So installing here
-repoints *the factory's* `core.hooksPath` at `.githooks`, silently disabling the factory's own
-pre-commit gate. Verified:
+`git config` writes **repository-level** config regardless of which subdirectory you run it from — and these
+directories are inside the factory's own repository, not separate repos. So installing here rewrites *the
+factory's* `core.hooksPath`.
 
-```console
-$ git config core.hooksPath          # factory root, before
-.githooks-outer
-$ cd examples/node-npm && npm install   # fires the generated prepare script
-$ cd ../.. && git config core.hooksPath
-.githooks                            # hijacked
-```
+**That is currently harmless, and only by coincidence.** The factory now uses `.githooks` itself, so the
+value written is the value already there. Before the factory had a hook layer of its own this silently
+disabled whatever it did use. Do not rely on the coincidence: if the factory's hook path ever changes, this
+becomes a live hazard again with no warning.
 
-If you have already done it, `git config --unset core.hooksPath` (or set it back to whatever the factory
-uses) puts it right.
+If you suspect it, `git config core.hooksPath` at the factory root should read `.githooks`.
+
+There is a second reason to stay out regardless: installing creates a `node_modules` inside a committed
+example tree, which `examples:check` then reports as drift on every subsequent run until you delete it.
 
 **There is no reason to install here.** `tests/generation.test.ts` enumerates every reachable combination
 and installs and gates ten of them in throwaway temp directories, printing the ones it does not — safer
@@ -59,6 +57,16 @@ add review surface without adding verification.
 
 The first three above vary by **manager and runner** — differences measured in a handful of files. The
 fourth varies by **layout**, which is the only axis that changes the shape of the tree.
+
+### Why no example enables the `claude-workflows` feature
+
+It would add three workflow files and nothing readable. Those workflows are copied **verbatim** — no
+Handlebars, no interpolation — so `modules/claude-workflows/source/.github/workflows/` already shows byte for
+byte what a project receives. A committed example earns its place when generated output *differs* from its
+template, as `tsconfig.json` and `CLAUDE.md` do; here it would only duplicate ~700 lines of review surface.
+
+`tests/layout.test.ts` covers the feature's placement — which files appear, which do not, and that a project
+declining it carries no mention of the token.
 
 ### Why `node-pnpm/` earns its place and `bun` + Vitest does not
 
