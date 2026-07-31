@@ -77,8 +77,13 @@ separate set that ships. Editing the wrong side is the most expensive mistake av
 is held to exactly the standard it prescribes — including the GritQL naming gate, which under the previous
 oxlint setup had no counterpart at all and so never applied to its own author.
 
-It also runs its own pre-commit hook, wired by `prepare` the same way generated projects do. Both of those
-were absent until recently: the factory prescribed a gate it did not run, and a linter it did not use.
+It also runs its own pre-commit hook, wired by `prepare` the same way generated projects do, and its own
+pull-request review — a byte-identical copy of the `claude-pr-review.yml` it ships, guarded against drift by
+`modules/payload-copies.test.ts`.
+
+All three were absent until recently: the factory prescribed a gate it did not run, a linter it did not use,
+and a reviewer it did not submit to. The payoff of closing that gap is that a broken shipped workflow now
+fails on **the factory's own** pull requests rather than on an adopter's first one.
 
 
 ## Documentation

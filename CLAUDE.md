@@ -14,13 +14,24 @@ There are two of everything, for the same reason:
 | Linter | Biome (`biome.jsonc`, which **extends** the shipped config) | Biome (`modules/gate/source/biome.json`) |
 | Docs | `docs/` | each module's `source/docs/` |
 | Pre-commit hook | `.githooks/pre-commit` | `modules/base/source/.githooks/pre-commit` |
+| PR review | `.github/workflows/claude-pr-review.yml` | `modules/claude-workflows/source/.github/workflows/...` |
 
-The linter row is the one pair that is deliberately **not** independent: `biome.jsonc` *extends*
-`modules/gate/source/biome.json`, so the factory is held to exactly the standard it prescribes and the rules
-have only one copy. That is the strongest form of this pattern, not an exception to it — where two files can
-be one plus a delta, they should be. `modules/gate/gate-config.test.ts` guards the two couplings that
-arrangement creates: the Biome version pins must match exactly, and the factory's `.biome/naming.grit` must
-stay byte-identical to the payload one.
+**Three of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
+it ships rather than a parallel version of it, it does:
+
+- **The linter EXTENDS the shipped config.** `biome.jsonc` extends `modules/gate/source/biome.json`, so the
+  rules have exactly one copy and the factory is held to precisely the standard it prescribes. This is the
+  strongest form of the pattern — where two files can be one plus a delta, they should be.
+- **The naming plugin and the PR review are byte-identical COPIES**, guarded by
+  `modules/payload-copies.test.ts`. Each is a copy for a specific reason the obvious approach cannot satisfy:
+  `extends` resolves an inherited plugin path against the extending file, and GitHub only runs workflows from
+  `.github/workflows/` at a repository root. The guard is what makes duplication acceptable — it cannot drift
+  silently.
+- **The Biome version pin must match exactly** on both sides, asserted by `modules/gate/gate-config.test.ts`.
+  A caret on the factory side is how it floats ahead and starts linting against rules its output never sees.
+
+The payoff is that the factory now finds out about a broken shipped workflow on **its own** pull requests,
+rather than an adopter's.
 
 ## Verification (run before declaring any change done)
 
