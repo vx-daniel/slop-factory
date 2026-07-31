@@ -12,6 +12,7 @@
  * that one resolution rule works unchanged from source and from the published package — no "am I built?"
  * branch anywhere in the generator.
  */
+import type { Dirent } from 'node:fs'
 import { cp, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { MODULE_COPY_TREE_DIRECTORY_NAMES } from '../modules/module-contract.js'
@@ -28,12 +29,14 @@ async function copyModuleAssets(moduleName: string): Promise<string[]> {
   const distModuleDirectory = path.join(DIST_MODULES_DIRECTORY, moduleName)
   const copied: string[] = []
 
-  const entries = await readdir(moduleDirectory, { withFileTypes: true })
+  const moduleContents = await readdir(moduleDirectory, { withFileTypes: true })
 
   // Every copy tree, not just `source/`. Missing one here would publish a package whose generator
   // resolves that tree at generation time and finds nothing — a failure that only the CONSUMER sees.
   for (const copyTreeDirectoryName of MODULE_COPY_TREE_DIRECTORY_NAMES) {
-    const hasCopyTree = entries.some((entry) => entry.isDirectory() && entry.name === copyTreeDirectoryName)
+    const hasCopyTree = moduleContents.some(
+      (moduleEntry) => moduleEntry.isDirectory() && moduleEntry.name === copyTreeDirectoryName,
+    )
     if (!hasCopyTree) {
       continue
     }
@@ -44,20 +47,22 @@ async function copyModuleAssets(moduleName: string): Promise<string[]> {
     copied.push(`${moduleName}/${copyTreeDirectoryName}/`)
   }
 
-  for (const entry of entries) {
-    if (!(entry.isFile() && entry.name.endsWith(TEMPLATE_EXTENSION))) {
+  for (const moduleEntry of moduleContents) {
+    if (!(moduleEntry.isFile() && moduleEntry.name.endsWith(TEMPLATE_EXTENSION))) {
       continue
     }
     await mkdir(distModuleDirectory, { recursive: true })
-    await cp(path.join(moduleDirectory, entry.name), path.join(distModuleDirectory, entry.name))
-    copied.push(`${moduleName}/${entry.name}`)
+    await cp(path.join(moduleDirectory, moduleEntry.name), path.join(distModuleDirectory, moduleEntry.name))
+    copied.push(`${moduleName}/${moduleEntry.name}`)
   }
 
   return copied
 }
 
-const moduleDirectoryEntries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
-const moduleNames = moduleDirectoryEntries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+const moduleDirectoryEntries: Dirent[] = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
+const moduleNames = moduleDirectoryEntries
+  .filter((moduleEntry) => moduleEntry.isDirectory())
+  .map((moduleEntry) => moduleEntry.name)
 
 let totalCopied = 0
 for (const moduleName of moduleNames) {

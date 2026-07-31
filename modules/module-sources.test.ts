@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './module-contract.js'
 
-const MODULES_DIRECTORY = import.meta.dirname
+const MODULES_DIRECTORY: string = import.meta.dirname
 const FACTORY_ROOT = path.resolve(MODULES_DIRECTORY, '..')
 
 /**
@@ -62,16 +62,16 @@ const NPM_IGNORE_FILENAMES = ['.gitignore', '.npmignore']
 
 /** Recursively collects every file path under a directory, relative to it. */
 async function listFilesRecursively(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true, recursive: true })
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
+  const directoryEntries = await readdir(directory, { withFileTypes: true, recursive: true })
+  return directoryEntries
+    .filter((directoryEntry) => directoryEntry.isFile())
+    .map((fileEntry) => path.relative(directory, path.join(fileEntry.parentPath, fileEntry.name)))
 }
 
 /** Module directory names, discovered rather than listed, so a new module is covered automatically. */
 async function listModuleNames(): Promise<string[]> {
-  const entries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  const moduleEntries = await readdir(MODULES_DIRECTORY, { withFileTypes: true })
+  return moduleEntries.filter((moduleEntry) => moduleEntry.isDirectory()).map((moduleEntry) => moduleEntry.name)
 }
 
 /**

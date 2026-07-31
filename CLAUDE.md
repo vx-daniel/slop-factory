@@ -78,6 +78,19 @@ because that failure recurred three times in one session.
 [`docs/module-contract.md`](docs/module-contract.md) is the orientation document. Read it before adding or
 moving a module.
 
+## Three lint warnings are expected
+
+`npm run lint` reports exactly **three** `useExplicitType` warnings, all in `plopfile.ts`, all on callback
+parameters plop's own types leave implicit (`when`, `actions`). They are warnings rather than errors because
+the shipped config sets that rule to `warn` deliberately — it is nursery-tier and contextually-typed
+callbacks are the case it handles worst.
+
+Annotating them would mean asserting a shape plop does not promise, which trades a warning for a cast. Left
+alone on purpose. If the count changes, something real changed — investigate rather than re-baselining.
+
+Everything else is clean: zero errors, zero infos. That is deliberate, because a hook that prints noise on
+every commit trains people to stop reading it.
+
 ## Things that look like bugs and are not
 
 - **The factory runs its built output, always — even in development.** Two measured constraints force it;

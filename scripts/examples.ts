@@ -121,20 +121,20 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
  */
 async function findOrphanedExampleDirectories(): Promise<string[]> {
   const expectedDirectoryNames = new Set(EXAMPLE_PROJECTS.map((example) => example.directoryName))
-  const entries = await readdir(EXAMPLES_DIRECTORY, { withFileTypes: true })
+  const exampleEntries = await readdir(EXAMPLES_DIRECTORY, { withFileTypes: true })
 
-  return entries
-    .filter((entry) => entry.isDirectory() && !expectedDirectoryNames.has(entry.name))
-    .map((entry) => entry.name)
+  return exampleEntries
+    .filter((exampleEntry) => exampleEntry.isDirectory() && !expectedDirectoryNames.has(exampleEntry.name))
+    .map((exampleEntry) => exampleEntry.name)
     .sort()
 }
 
 /** Every file under a directory, as paths relative to it. Sorted, so comparisons are deterministic. */
 async function listFilesRecursively(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true, recursive: true })
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
+  const directoryEntries = await readdir(directory, { withFileTypes: true, recursive: true })
+  return directoryEntries
+    .filter((directoryEntry) => directoryEntry.isFile())
+    .map((fileEntry) => path.relative(directory, path.join(fileEntry.parentPath, fileEntry.name)))
     .sort()
 }
 
