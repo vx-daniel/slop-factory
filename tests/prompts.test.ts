@@ -334,14 +334,25 @@ describe('the shape of the conversation', () => {
     ]
 
     for (const { answerKeysReadByPrompt } of walks) {
-      for (const [promptName, readKeys] of answerKeysReadByPrompt) {
-        const guardedPromptIndex = promptIndexByName.get(promptName) ?? 0
+      // Iterated over the PROMPT LIST rather than over the recorded map, so the guarded prompt's position
+      // comes from the iteration itself. Looking it up would need a `?? 0` for a case that cannot happen —
+      // and a default index of 0 is the worst possible one to invent, because it silently makes every read
+      // look like a violation, or none. The one `??` left below is real: a prompt without a `when` records
+      // nothing, which is not a failure.
+      for (const [guardedPromptIndex, prompt] of prompts.entries()) {
+        if (prompt.name === undefined) {
+          continue
+        }
+        const readKeys = answerKeysReadByPrompt.get(prompt.name) ?? []
 
         for (const readKey of readKeys) {
+          // This lookup CAN legitimately miss, and that is a finding rather than a fallback: a guard
+          // reading a key no prompt produces — a typo, or an answer that used to exist — is `undefined`
+          // forever, exactly the bug this test is here for.
           const readPromptIndex = promptIndexByName.get(readKey)
           expect(
             readPromptIndex !== undefined && readPromptIndex < guardedPromptIndex,
-            `the "${promptName}" prompt's when() reads "${readKey}", which is not collected before it — ` +
+            `the "${prompt.name}" prompt's when() reads "${readKey}", which is not collected before it — ` +
               'it will always be undefined, so the question is always skipped',
           ).toBe(true)
         }
