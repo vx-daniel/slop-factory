@@ -9,7 +9,7 @@ nobody runs either.
 | prompts | `npm run test:prompts` | ms | the prompt list matches the contract's constants |
 | layout | `npm run test:layout` | ~1s | **where** files land, for every layout — generates, installs nothing |
 | packaging | `npm run test:packaging` | ~1s | the tarball `npm publish` would upload |
-| cli | `npm run test:cli` | ~2s | what `npx slop-factory` prints, to which stream, and its exit code |
+| cli | `npm run test:cli` | ~2s | what `npx slop-factory` prints and exits with, and the prompt session itself |
 | examples | `npm run examples:check` | ~2s | the committed `examples/` still match the generator |
 | generation | `npm run verify` | ~35s | generated projects install and pass their own gate |
 

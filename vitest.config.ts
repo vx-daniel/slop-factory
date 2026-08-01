@@ -9,6 +9,9 @@ import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './modules/module-contract.js'
  */
 const GENERATION_TIMEOUT_MS = 600_000
 
+/** Comfortably above `tests/drive-prompts.ts`'s per-prompt wait, so its diagnostic wins the race. */
+const INTERACTIVE_TIMEOUT_MS = 30_000
+
 export default defineConfig({
   test: {
     // Six projects, split by COST, because that split decides what gets run habitually. Listed roughly
@@ -58,7 +61,14 @@ export default defineConfig({
           // `dist/cli.js` and refuses if it is absent. A subprocess per case, so seconds rather than
           // milliseconds, which is why it is not folded into `unit`.
           name: 'cli',
-          include: ['tests/cli.test.ts'],
+          // Two files: `cli.test.ts` spawns the binary for the arguments that do not prompt, and
+          // `interactive-cli.test.ts` drives the prompt list itself. Same project because they are the
+          // same concern at the same cost, and a seventh project would need its own CI step to say so.
+          include: ['tests/cli.test.ts', 'tests/interactive-cli.test.ts'],
+          // Above the harness's own 5s wait for a prompt to render, so a mis-scripted flow reports the
+          // transcript it captured rather than Vitest's generic "test timed out", which says nothing about
+          // which question never appeared.
+          testTimeout: INTERACTIVE_TIMEOUT_MS,
         },
       },
       {
