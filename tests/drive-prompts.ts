@@ -16,9 +16,9 @@ import { resolvePlopfilePath } from '../plopfile-path.js'
  * both measured as unnecessary.
  *
  * THE ONE NON-OBVIOUS PART, which cost four failed attempts to find. node-plop returns
- * `Object.assign({}, plopfileApi, {…})` — a COPY (`node-plop/src/node-plop.js:234`) — while the generator
+ * `Object.assign({}, plopfileApi, {…})` — a COPY (`node-plop`'s `nodePlopApi` assembly) — while the generator
  * runner holds the original and calls `plopfileApi.inquirer.prompt(…)`
- * (`node-plop/src/generator-runner.js:29`). So assigning `plop.inquirer = …` mutates an object nothing
+ * (`node-plop`'s `runGeneratorPrompts`). So assigning `plop.inquirer = …` mutates an object nothing
  * reads, and the prompts quietly render to the real stdout instead. What DOES reach the runner is replacing
  * `prompt` on the inquirer module itself, which both objects hold by reference. That is a module-global
  * mutation, so it is restored in a `finally` — a leaked patch would silently redirect every later suite in
@@ -50,17 +50,6 @@ export interface DriveResult {
  */
 export const ENTER = '\n'
 export const DOWN_ARROW = '\u001B[B'
-/**
- * Ctrl-C. Exported but UNUSED, deliberately: inquirer's force-close does
- * `process.kill(process.pid, 'SIGINT')` (`inquirer/lib/ui/baseUI.js:32`), so sending this in-process kills
- * the Vitest worker rather than the prompt. It stays here so the next person reaches for it, finds this
- * comment, and does not rediscover that the hard way — see `interactive-cli.test.ts`'s header.
- *
- * That same self-kill is what used to make the CLI's own interruption path unreachable (#50). `cli.ts` now
- * handles the signal; do not try to reach that path from here, because arriving at it means the worker is
- * already dying.
- */
-export const CONTROL_C = '\u0003'
 /**
  * One character rubbed out.
  *
@@ -99,7 +88,7 @@ function stripAnsiSequences(rawOutput: string): string {
  *
  * inquirer declares `input`/`output` as `NodeJS.ReadStream`/`WriteStream` — TTY handles carrying
  * `setRawMode`, `cursorTo`, `isRaw` and two dozen more. Its runtime requirement is much smaller: it
- * defaults `skipTTYChecks` to true (`inquirer/lib/ui/baseUI.js:61`) and, for these prompt types, never
+ * defaults `skipTTYChecks` to true (`inquirer`'s `setupReadlineOptions`) and, for these prompt types, never
  * calls a TTY-only member.
  *
  * That is measured, not assumed. A bare `PassThrough` pair — no `isTTY`, no `setRawMode` — drives the
@@ -134,11 +123,14 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
   })
 
   const plop = await nodePlop(resolvePlopfilePath())
-  const originalPrompt = inquirer.prompt
   // The second declaration mismatch (see `asPromptStreams`): node-plop exposes `inquirer` at runtime as a
-  // documented passthrough (`node-plop/src/node-plop.js:223`) but omits it from `NodePlopAPI`. And per this
+  // documented passthrough (`node-plop`'s `plopfileApi` literal) but omits it from `NodePlopAPI`. And per this
   // file's header, the module object is the only thing the returned api and the runner both hold.
   const plopWithInquirer = plop as unknown as { readonly inquirer: { prompt: typeof inquirer.prompt } }
+  // Captured and restored through the SAME expression that is mutated. `plop.inquirer === inquirer` today,
+  // so reading one and writing the other happens to work — pinned by nothing, and a silent redirect of every
+  // later suite in this worker if it ever stops being true.
+  const originalPrompt = plopWithInquirer.inquirer.prompt
   plopWithInquirer.inquirer.prompt = inquirer.createPromptModule(asPromptStreams(scriptedInput, capturedOutput))
 
   try {
@@ -147,7 +139,9 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
     // same way, for the same reason.
     const answersPromise: Promise<Record<string, unknown>> = plop.getGenerator('generate').runPrompts()
     // Attached before the first await so a rejection during the script cannot become an unhandled one.
-    const settled = answersPromise.then(
+    // Typed as the union rather than inferred per-branch, so `waitForText` can read `error` off it without
+    // narrowing — the whole point of passing it there is to report a failure instead of timing out on one.
+    const settled: Promise<{ answers?: Record<string, unknown>; error?: unknown }> = answersPromise.then(
       (answers) => ({ answers }),
       (error: unknown) => ({ error }),
     )
@@ -160,7 +154,7 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
     const outcome = await settled
     return { ...outcome, screenText: stripAnsiSequences(rawOutput) }
   } finally {
-    inquirer.prompt = originalPrompt
+    plopWithInquirer.inquirer.prompt = originalPrompt
   }
 }
 
@@ -170,18 +164,30 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
  * Racing against the run matters: a Ctrl-C script ends the prompts early, and without this the next wait
  * would block for the full timeout before reporting a confusing miss instead of the real outcome.
  */
-async function waitForText(readScreenText: () => string, awaitText: string, runEnded: Promise<unknown>): Promise<void> {
+async function waitForText(
+  readScreenText: () => string,
+  awaitText: string,
+  runEnded: Promise<{ readonly error?: unknown }>,
+): Promise<void> {
   const deadline = Date.now() + PROMPT_APPEARANCE_TIMEOUT_MS
-  let runHasEnded = false
-  void runEnded.then(() => {
-    runHasEnded = true
+  let endedWith: { readonly error?: unknown } | undefined
+  void runEnded.then((outcome) => {
+    endedWith = outcome
   })
 
   while (Date.now() < deadline) {
     if (readScreenText().includes(awaitText)) {
       return
     }
-    if (runHasEnded) {
+    if (endedWith !== undefined) {
+      // The run finished before this question appeared. If it finished by REJECTING, that error is the
+      // real story and returning quietly would bury it — the caller then sees only a downstream assertion
+      // about a missing answer, with the cause discarded.
+      if (endedWith.error !== undefined) {
+        throw new Error(
+          `the prompt session failed while waiting for ${JSON.stringify(awaitText)}: ${String(endedWith.error)}`,
+        )
+      }
       return
     }
     await new Promise((resolve) => setTimeout(resolve, PROMPT_POLL_INTERVAL_MS))

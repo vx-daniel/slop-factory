@@ -51,7 +51,14 @@ export default defineConfig({
           // Reads the generator's prompt list without answering it. Cheap, but it needs the BUILT
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
-          include: ['tests/prompts.test.ts'],
+          // Two files, one subject: `prompts.test.ts` reads the prompt list as data, and
+          // `prompt-session.test.ts` answers it with scripted keystrokes. Neither touches `cli.ts` — the
+          // session harness drives the plopfile directly — so they belong here rather than in `cli`.
+          include: ['tests/prompts.test.ts', 'tests/prompt-session.test.ts'],
+          // Above the harness's own 5s wait for a prompt to render, so a mis-scripted flow reports the
+          // transcript it captured rather than Vitest's generic "test timed out", which says nothing about
+          // which question never appeared.
+          testTimeout: INTERACTIVE_TIMEOUT_MS,
         },
       },
       {
@@ -61,14 +68,7 @@ export default defineConfig({
           // `dist/cli.js` and refuses if it is absent. A subprocess per case, so seconds rather than
           // milliseconds, which is why it is not folded into `unit`.
           name: 'cli',
-          // Two files: `cli.test.ts` spawns the binary for the arguments that do not prompt, and
-          // `interactive-cli.test.ts` drives the prompt list itself. Same project because they are the
-          // same concern at the same cost, and a seventh project would need its own CI step to say so.
-          include: ['tests/cli.test.ts', 'tests/interactive-cli.test.ts'],
-          // Above the harness's own 5s wait for a prompt to render, so a mis-scripted flow reports the
-          // transcript it captured rather than Vitest's generic "test timed out", which says nothing about
-          // which question never appeared.
-          testTimeout: INTERACTIVE_TIMEOUT_MS,
+          include: ['tests/cli.test.ts'],
         },
       },
       {

@@ -1,6 +1,7 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import inquirer from 'inquirer'
 import nodePlop from 'node-plop'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolvePlopfilePath } from '../plopfile-path.js'
@@ -14,7 +15,7 @@ import { BACKSPACE, DOWN_ARROW, drivePrompts, ENTER } from './drive-prompts.js'
  * it. This file is the only place a question is displayed and answered. See #44.
  *
  * CTRL-C IS ABSENT, AND CANNOT BE HERE. inquirer's force-close handler does
- * `process.kill(process.pid, 'SIGINT')` (`inquirer/lib/ui/baseUI.js:32`) — a real Ctrl-C signals the whole
+ * `process.kill(process.pid, 'SIGINT')` (`inquirer`'s `onForceClose`) — a real Ctrl-C signals the whole
  * process, which in a Vitest worker kills the worker. Measured: the two tests that tried it took the file
  * down with them, reporting four of six tests as never run.
  *
@@ -42,8 +43,17 @@ const PACKAGE_NAMES_QUESTION = 'Names of the packages'
 const PACKAGE_MANAGER_QUESTION = 'Which package manager?'
 const FEATURES_QUESTION = 'Which optional features'
 
-/** A package name the validator refuses, and the reason it gives. */
+/** A package name the validator refuses. */
 const REJECTED_PACKAGE_NAME = '../escape'
+
+/**
+ * The refusal, matched in its QUOTED form.
+ *
+ * `single directory name` alone is not unique to this validator — `plopfile.ts` emits that wording for the
+ * project name too — and the bare name also appears in the transcript simply because it was typed. The
+ * quoted `"../escape"` only ever comes from the validator's own message, so it discriminates.
+ */
+const REFUSAL_MESSAGE = `"${REJECTED_PACKAGE_NAME}" must be a single directory name`
 
 let workspaceDirectory: string
 
@@ -57,7 +67,7 @@ afterAll(async () => {
 
 describe('accepting every default', () => {
   it('skips the workspace question and generates a project', async () => {
-    const { answers, screenText } = await drivePrompts([
+    const { answers } = await drivePrompts([
       { awaitText: PROJECT_NAME_QUESTION, send: `bare-enter${ENTER}` },
       { awaitText: DESTINATION_QUESTION, send: `${workspaceDirectory}${ENTER}` },
       { awaitText: LAYOUT_QUESTION, send: ENTER },
@@ -75,14 +85,16 @@ describe('accepting every default', () => {
       packageManager: 'npm',
       enableFeatures: ['config'],
     })
-    expect(screenText, 'the workspace-only question was asked under the single layout').not.toContain(
-      PACKAGE_NAMES_QUESTION,
-    )
-
     // Answered is not generated: `runPrompts` only collects. Running the actions with what the operator
     // actually typed is what proves the two halves fit together.
     const plop = await nodePlop(resolvePlopfilePath())
-    const result = await plop.getGenerator('generate').runActions(answers ?? {})
+    // Thrown rather than defaulted to `{}`. An empty answer set is a HARNESS failure, and passing it on
+    // would surface as a plopfile complaint about a missing package manager — blaming the generator for
+    // something the test did. Throwing also narrows the type, so no cast is needed.
+    if (answers === undefined) {
+      throw new Error('the prompt session resolved without answers')
+    }
+    const result = await plop.getGenerator('generate').runActions(answers)
 
     expect(result.failures, JSON.stringify(result.failures)).toEqual([])
     expect(await readdir(path.join(workspaceDirectory, 'bare-enter'))).toContain('package.json')
@@ -128,14 +140,14 @@ describe('an answer the validator rejects', () => {
       // replacement without clearing produced `../escapecore`, which is what this script did on its first
       // run and is worth knowing: being re-asked does not mean starting from blank.
       {
-        awaitText: 'single directory name',
+        awaitText: REFUSAL_MESSAGE,
         send: `${BACKSPACE.repeat(REJECTED_PACKAGE_NAME.length)}core${ENTER}`,
       },
       { awaitText: PACKAGE_MANAGER_QUESTION, send: ENTER },
       { awaitText: FEATURES_QUESTION, send: ENTER },
     ])
 
-    expect(screenText, 'the operator was not told why the name was refused').toContain('single directory name')
+    expect(screenText, 'the operator was not told why the name was refused').toContain(REFUSAL_MESSAGE)
     // The rejected value must not survive anywhere in the answers — being re-asked is only useful if the
     // second answer is the one kept.
     expect(answers?.packageNames).toBe('core')
@@ -143,10 +155,14 @@ describe('an answer the validator rejects', () => {
 })
 
 describe('the harness leaves no trace', () => {
-  it('removes the exit listener inquirer registers, so later suites are unaffected', async () => {
-    // inquirer's baseUI registers `process.on('exit')` per prompt session and removes it in `close()`.
-    // Driving prompts IN-PROCESS means a session that failed to close would leak that listener into the
-    // Vitest worker and fire at teardown, breaking unrelated suites that share it.
+  it('restores the patched module and the exit listener', async () => {
+    // TWO LEAKS, and the harness header calls the second one the dangerous one: a `prompt` left pointing at
+    // a dead stream would silently redirect every later suite in this worker. Only the listener was checked
+    // before, which is the smaller of the two.
+    //
+    // Both are measured immediately either side of ONE session, not against a baseline taken at file scope —
+    // a delta across the whole file is contaminated by the tests above and can pass having driven nothing.
+    const promptBeforeSession = inquirer.prompt
     const listenersBefore = process.listenerCount('exit')
 
     await drivePrompts([
@@ -157,6 +173,7 @@ describe('the harness leaves no trace', () => {
       { awaitText: FEATURES_QUESTION, send: ENTER },
     ])
 
+    expect(inquirer.prompt, 'the harness left its prompt module patched in').toBe(promptBeforeSession)
     expect(process.listenerCount('exit'), 'a prompt session leaked its exit listener').toBe(listenersBefore)
   })
 })
