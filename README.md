@@ -131,6 +131,7 @@ npm run lint              # biome check on its own (lint:fix to autofix, format 
 npm run typecheck         # typechecks the factory
 npm test                  # fast unit tests: merge/render logic, registry invariants, source-tree guards
 npm run test:prompts      # reads the generator's prompt list and checks it against the contract
+npm run test:cli          # spawns the published binary and checks what it prints and exits with
 npm run test:layout       # generates into a temp dir and checks WHERE files land — installs nothing
 npm run test:packaging    # builds + inspects the tarball npm publish would upload
 npm run examples:check    # fails if examples/ no longer matches the generator

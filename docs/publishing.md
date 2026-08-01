@@ -7,8 +7,8 @@ The published package is **only** `bin/`, `dist/`, and the README. `files` is an
 named is absent from the tarball.
 
 ```bash
-npm publish   # prepublishOnly: check:all → test:prompts → test:layout → test:packaging
-              #                 → examples:check → verify
+npm publish   # prepublishOnly: check:all → test:prompts → test:cli → test:layout
+              #                 → test:packaging → examples:check → verify
 ```
 
 ## The factory always runs its built output, never its TypeScript source

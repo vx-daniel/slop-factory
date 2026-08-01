@@ -15,9 +15,10 @@
 # module, forget to refresh the examples. Together they cost about 3.3 seconds, measured.
 #
 # WHAT IS DELIBERATELY NOT HERE, so a passing hook is not read as more than it is:
-#   test:prompts, test:layout — cheap, but they only fire on generator changes, and each rebuilds.
+#   test:prompts, test:cli,   — cheap, but they only fire on generator or CLI changes, and each rebuilds.
+#   test:layout
 #   verify                    — installs and gates ten generated projects. Minutes. CI's job.
-# All three run in .github/workflows/ci.yml on every push and pull request.
+# All four run in .github/workflows/ci.yml on every push and pull request.
 #
 # No package-manager detection, unlike the shipped hook. That one is copied verbatim into projects using
 # any of three managers and must work in all of them; the factory is always npm and commits

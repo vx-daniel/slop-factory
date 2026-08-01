@@ -1,6 +1,6 @@
 # Verification
 
-Six suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
+Seven suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
 nobody runs either.
 
 | Suite | Command | Cost | What it proves |
@@ -9,6 +9,7 @@ nobody runs either.
 | prompts | `npm run test:prompts` | ms | the prompt list matches the contract's constants |
 | layout | `npm run test:layout` | ~1s | **where** files land, for every layout — generates, installs nothing |
 | packaging | `npm run test:packaging` | ~1s | the tarball `npm publish` would upload |
+| cli | `npm run test:cli` | ~2s | what `npx slop-factory` prints, to which stream, and its exit code |
 | examples | `npm run examples:check` | ~2s | the committed `examples/` still match the generator |
 | generation | `npm run verify` | ~35s | generated projects install and pass their own gate |
 
@@ -17,8 +18,9 @@ generated projects wire theirs — runs `check:all` and `examples:check`, about 
 second step is there because "changed a module, forgot to refresh the examples" is the most frequent mistake
 in this repository's history, and it is the one a human would otherwise push.
 
-`test:prompts`, `test:layout` and `verify` are deliberately **not** in the hook: the first two only fire on
-generator changes and each rebuilds, and the last takes minutes. All three run in CI.
+`test:prompts`, `test:cli`, `test:layout` and `verify` are deliberately **not** in the hook: the first three
+only fire on generator or CLI changes and each rebuilds, and the last takes minutes. All four run in CI —
+`modules/vitest-projects-in-ci.test.ts` fails if a Vitest project is ever left out of the workflow.
 
 The linter is the Biome config the factory ships, reached by `extends` — see
 [`module-contract.md`](module-contract.md). A green `npm run lint` here therefore means what it means in a
