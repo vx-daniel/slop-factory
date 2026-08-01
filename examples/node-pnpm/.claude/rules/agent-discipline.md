@@ -43,7 +43,7 @@ Do not hardcode strings, numbers, or paths that belong in named constants. Extra
 
 ### Claims Must Match the Diff
 
-How you describe a change — in a PR/commit body or a summary to the user — must match what the diff actually touches. Do not label a change "docs-only" / "no code impact" when the same series also edits config (`biome.json`, `tsconfig.json`, `vitest.config.ts`), the gate (`scripts/gate.ts`), CI workflows, or `src/`. The reviewer (the `claude-pr-review.yml` bot, or a human) who trusts the label skips exactly the file that needed the look. A "docs" PR that also flips a Biome rule to `error`, adds a gate step, or widens a permission is a code change wearing a docs label.
+How you describe a change — in a PR/commit body or a summary to the user — must match what the diff actually touches. Do not label a change "docs-only" / "no code impact" when the same series also edits config (`biome.json`, `tsconfig.json`, the test runner's config), the gate (`scripts/gate.ts`), CI workflows, or source. The reviewer — a human, or the automated PR reviewer if this project was generated with the Claude workflows feature — who trusts the label skips exactly the file that needed the look. A "docs" PR that also flips a Biome rule to `error`, adds a gate step, or widens a permission is a code change wearing a docs label.
 
 ---
 

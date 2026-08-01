@@ -23,11 +23,16 @@ always_on: true
 - `noProcessEnv`: **off in source** (`**/*.ts` except `*.test.ts` — composition roots legitimately
   read env vars) but **error in tests** (a test that reads `process.env` should inject instead; see
   the `process.env` section below).
-- `useExplicitType` (warn) — explicit return types on exported functions; contextually-typed
-  callbacks are exempt, which is why it is a warning, not an error.
+- `useExplicitType` (warn) — explicit types on functions, methods, variables **and parameters**, not
+  only exported ones. It exempts functions whose type the position already supplies: callbacks passed
+  as **call arguments**, IIFEs, and functions assigned to an annotated declarator. It does **not**
+  exempt every callback — one assigned to an object property whose type a library leaves implicit is
+  still reported. That case is why the rule is a warning rather than an error: it is nursery-tier and
+  handles library-supplied callback types worst, and annotating them means asserting a shape the
+  library does not promise.
 
 **Gated by the naming plugin** (`.biome/naming.grit`, a GritQL plugin registered via biome.json's
-`plugins` key — it runs as part of `npm run lint`):
+`plugins` key — it runs as part of the `lint` script):
 
 - **Abbreviations** in bindings and property keys — `cfg`, `ctx`, `msg`, `req`, `res`, `idx`, `tmp`,
   and ~70 more — are **errors**.
@@ -40,7 +45,8 @@ The plugin's allowlist ships **empty**. Before adding to it, read the note above
 an inherited allowlist silently permits abbreviations that mean nothing in your project.
 
 **Review-only** (no mechanical gate): action+subject function names, boolean `is/has/should/can`
-prefixes, one-operation-per-line. Run `npm run lint` (or `npm run check:all`) to see the gated ones.
+prefixes, one-operation-per-line. Run the `lint` script (or `check:all`) to see the gated ones —
+through whichever package manager this project uses, which `CLAUDE.md` names.
 
 ## Naming Conventions
 

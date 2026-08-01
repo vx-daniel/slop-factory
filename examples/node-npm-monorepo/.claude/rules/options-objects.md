@@ -11,13 +11,22 @@ trigger_phrase:
 
 # Options Objects Over Positional Parameters
 
+> **Blueprint note.** The examples below are deliberately generic (orders, stores). When you adopt this
+> blueprint, replace them with real call sites from your codebase — an example naming a function that
+> does not exist is worse than no example, because agents follow it. See `broken-windows.md`
+> § "Don't Broaden Scope While Cleaning".
+
 Functions with more than 2 parameters MUST use a single options object instead of positional
 arguments.
 
-**Gated vs. review-only:** Biome's `useMaxParams` (error, at its default threshold of **4**) is the
-mechanical floor — it fails CI at 4+ positional params. This rule is **stricter and review-enforced**:
-convert at **3+**. So a 3-parameter function passes CI but still violates this rule — don't wait for
-the gate to catch it, and don't assume green CI means the convention is met.
+**Gated vs. review-only:** Biome's `useMaxParams` (error) is the mechanical floor, and it is a *loose*
+one. Left at its default `max: 4`, it reports only when the count **exceeds** four — so it fails CI at
+**5+** positional params, not at 4. This rule is **stricter and review-enforced**: convert at **3+**.
+
+So both a 3-parameter and a 4-parameter function pass CI while still violating this rule. Don't wait
+for the gate to catch it, and don't read green CI as evidence the convention is met — on this rule the
+gate is two params behind it by design. (Threshold verified against the Biome version pinned in
+`package.json`; if that pin moves, re-check the default before trusting this paragraph.)
 
 ## Rule
 
@@ -35,7 +44,7 @@ function createPostgresOrderStore(options: PostgresOrderStoreOptions): OrderStor
 ## When This Applies
 
 - **3+ parameters**: Convert to an options object. Functions with 1–2 parameters are fine as
-  positional (e.g. `flagString(args, key)`).
+  positional (e.g. `formatCurrency(amountCents, currency)`).
 - **Exported functions**: Always use options objects when 3+ params — callers benefit the most.
 - **Internal/private functions**: Same rule. Consistency reduces cognitive overhead and makes future
   extraction easier.

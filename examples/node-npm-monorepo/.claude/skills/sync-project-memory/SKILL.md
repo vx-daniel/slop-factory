@@ -8,8 +8,8 @@ description: >-
   asks why memories aren't shared with teammates or the CI reviewer, or after a working
   stretch that produced durable learnings worth committing. This skill is the export half: it STAGES
   the durable corpus in the repo, which a `CLAUDE.md` `@import` then auto-loads in LOCAL Claude Code
-  sessions (CI headless does not expand the import — PR #378; the CI reviewer `Read`s it explicitly in
-  its workflow). It also builds the current-task index (`MEMORY_CURRENT.md` + `temp/` files); distillation is the separate `audit-memory` skill.
+  sessions (CI headless does not expand the import, so the CI reviewer `Read`s it explicitly in its
+  workflow). It also builds the current-task index (`MEMORY_CURRENT.md` + `temp/` files); distillation is the separate `audit-memory` skill.
 ---
 
 # Sync Project Memory (mind-meld — export)
@@ -23,11 +23,12 @@ in GitHub Actions. This skill mirrors the **durable** half of that memory into t
 **What this does and does not deliver today.** Committing the corpus makes it **shareable and
 version-controlled**, and a `CLAUDE.md` `@import` of `.claude/memory/MEMORY.md` makes the durable index
 **auto-load in local Claude Code sessions**. The **CI reviewer is headless and does NOT expand `@import`**
-(confirmed in PR #378 — `CLAUDE.md` is injected as raw text), so it does not pick the index up
-automatically — its review workflow `Read`s this index explicitly instead. Now also built: the
-current-task index (`MEMORY_CURRENT.md` + `temp/` files). Still deferred: a local-dir merge-**import**.
+(`CLAUDE.md` reaches it as raw text), so it does not pick the index up automatically — its review
+workflow `Read`s this index explicitly instead. Now also built: the current-task index
+(`MEMORY_CURRENT.md` + `temp/` files). Still deferred: a local-dir merge-**import**.
 
-Full design + roadmap: `.local/plans/agent-memory-sync-design.md`.
+See `.claude/rules/agent-memory.md` § "What actually loads, and when" for the same split stated as a
+convention.
 
 ## When to run
 
@@ -95,4 +96,5 @@ them. Run it once per repo (or after any export); a future SessionStart hook can
   `audit-memory` skill (built) — not this skill's job.
 - **CI memory-hygiene reminder** (prompt retiring a spent `temp/` note when its issue's PR lands) — not yet built.
 
-These are specified in `.local/plans/agent-memory-sync-design.md`. Don't improvise them here.
+Don't improvise them here. If you need one, design it deliberately and write the design down first —
+these are the pieces most likely to be built badly under time pressure.

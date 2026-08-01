@@ -56,7 +56,10 @@ If you reach for a suppression, that is a signal to re-check the type model firs
 
 ### Explicit Return Types on Exported Functions
 
-Also enforced as a Biome warning (`useExplicitType`). Contextually-typed callbacks are exempt.
+Also enforced as a Biome warning (`useExplicitType`) — which covers parameters as well as return types,
+and is not limited to exports. Exempt are the positions that already supply the type: callbacks passed
+as call arguments, IIFEs, and functions assigned to an annotated declarator. A callback on an object
+property is **not** exempt; see `naming-and-style.md` § "Enforcement" for why that keeps it a warning.
 
 Beyond documentation, an explicit return type makes the *function* the error site when the body drifts
 from the contract. Without one, the inferred type silently widens and the error surfaces at some
