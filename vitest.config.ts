@@ -53,6 +53,16 @@ export default defineConfig({
       },
       {
         test: {
+          // Spawns the published binary and asserts what it prints, to which stream, and its exit code.
+          // Needs the BUILT cli, like `prompts` needs the built plopfile — `bin/slop-factory.mjs` loads
+          // `dist/cli.js` and refuses if it is absent. A subprocess per case, so seconds rather than
+          // milliseconds, which is why it is not folded into `unit`.
+          name: 'cli',
+          include: ['tests/cli.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'packaging',
           include: ['tests/packaging.test.ts'],
           // Runs `npm run build` in a hook before asserting on the tarball.

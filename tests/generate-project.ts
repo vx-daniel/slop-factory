@@ -32,7 +32,22 @@ export interface GenerationRequest {
 
 export interface CommandResult {
   readonly succeeded: boolean
+  /**
+   * Both streams, concatenated. What almost every caller wants: a failure message to paste into an
+   * assertion, where which stream carried it is noise.
+   */
   readonly output: string
+  /**
+   * The streams kept apart, for the callers that are asserting about the streams THEMSELVES.
+   *
+   * `tests/cli.test.ts` is the reason they exist: a CLI printing its usage to stdout on `--help` and to
+   * stderr on an unknown command is the behaviour under test, and `output` cannot tell those apart —
+   * both spellings of the bug produce identical combined text.
+   */
+  readonly standardOutput: string
+  readonly standardError: string
+  /** Exit code, or `null` if the process was killed by a signal. Distinguishes 1 from 130. */
+  readonly exitCode: number | null
 }
 
 /**
@@ -67,7 +82,7 @@ export async function generateProject(request: GenerationRequest): Promise<strin
   return path.join(request.workspaceDirectory, request.projectName)
 }
 
-/** Runs a command in a directory, capturing combined output for failure messages. */
+/** Runs a command in a directory, capturing its output for assertions and failure messages. */
 export function runCommand(options: {
   readonly command: string
   readonly commandArguments: readonly string[]
@@ -77,9 +92,15 @@ export function runCommand(options: {
     cwd: options.workingDirectory,
     encoding: 'utf8',
   })
+  const standardOutput = result.stdout ?? ''
+  const standardError = result.stderr ?? ''
+
   return {
     succeeded: result.status === 0,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
+    output: `${standardOutput}${standardError}`,
+    standardOutput,
+    standardError,
+    exitCode: result.status,
   }
 }
 
