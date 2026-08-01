@@ -52,6 +52,11 @@ jobs:
       - name: Prompt contract
         run: npm run test:prompts
 
+      # Spawns the published binary. Cheap, and the only step that runs what `npx slop-factory` runs —
+      # everything else reaches the generator through node-plop's API and never sees bin/ or cli.ts.
+      - name: Command line
+        run: npm run test:cli
+
       # Generates into a temp directory and asserts WHERE files land, for every layout. It installs
       # nothing, so it is the only suite that can afford to cover the workspace combinations `verify`
       # deliberately skips. `modules/vitest-projects-in-ci.test.ts` exists because this step was missing

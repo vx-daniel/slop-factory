@@ -48,7 +48,7 @@ const NPM_RUN_REFERENCE_PATTERN = /npm run ([\w:-]+)/g
  * subject list can lose the whole list — to a config refactor, or to a project shape this file cannot read
  * a name from — and still report green. That is the inert-guard failure this repository has hit twice.
  */
-const EXPECTED_VITEST_PROJECT_COUNT = 5
+const EXPECTED_VITEST_PROJECT_COUNT = 6
 
 /** The factory's package.json scripts, by name. */
 async function readPackageJsonScripts(): Promise<Record<string, string>> {

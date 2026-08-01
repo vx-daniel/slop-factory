@@ -11,7 +11,7 @@ const GENERATION_TIMEOUT_MS = 600_000
 
 export default defineConfig({
   test: {
-    // Five projects, split by COST, because that split decides what gets run habitually. Listed roughly
+    // Six projects, split by COST, because that split decides what gets run habitually. Listed roughly
     // cheapest-first, and each one's own comment below gives the reason it is separate rather than folded
     // into the project before it.
     //
@@ -49,6 +49,16 @@ export default defineConfig({
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
           include: ['tests/prompts.test.ts'],
+        },
+      },
+      {
+        test: {
+          // Spawns the published binary and asserts what it prints, to which stream, and its exit code.
+          // Needs the BUILT cli, like `prompts` needs the built plopfile — `bin/slop-factory.mjs` loads
+          // `dist/cli.js` and refuses if it is absent. A subprocess per case, so seconds rather than
+          // milliseconds, which is why it is not folded into `unit`.
+          name: 'cli',
+          include: ['tests/cli.test.ts'],
         },
       },
       {

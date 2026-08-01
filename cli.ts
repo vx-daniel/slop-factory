@@ -21,13 +21,17 @@ const EXIT_CODE_INTERRUPTED = 130
 /**
  * Whether an error means the operator abandoned the prompts rather than something going wrong.
  *
+ * Exported for `tests/cli.test.ts` only — nothing else calls it. A predicate over three error shapes it
+ * cannot produce itself is exactly the thing worth checking directly, and reaching it through a real
+ * Ctrl-C would need a pseudo-terminal (see #44).
+ *
  * Inquirer signals this three different ways depending on how the session ended, and none of them is a
  * defect worth a stack trace: Ctrl-C rejects with an `ExitPromptError`, a closed stdin surfaces as
  * `ERR_USE_AFTER_CLOSE` from readline, and a force-close reports "User force closed the prompt".
  * Without this, quitting the generator prints a Node crash dump — which reads as a broken tool rather
  * than as the thing the user just asked for.
  */
-function isPromptInterruption(error: unknown): boolean {
+export function isPromptInterruption(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false
   }
@@ -42,24 +46,31 @@ Usage:
   npx slop-factory --help       Show this message
   npx slop-factory --version    Print the version
 
-The generator asks for a project name, a destination directory (browsed from the current working
-directory), a runtime, a test runner, and any optional features. Nothing is written until every
-question is answered, and it refuses to generate into a directory that is not empty.
+The generator asks for a project name, a destination directory (defaults to the one you are in), the
+layout — a single package, or a workspace — the package names to create under packages/ if you chose a
+workspace, a package manager, a test runner (asked only for bun), and any optional features.
+
+Nothing is written until every question is answered, and it refuses to generate into a directory that
+is not empty.
 `
 
-/** Reads the version out of the package's own manifest, so it cannot drift from what was published. */
+/**
+ * Reads the version out of the package's own manifest, so it cannot drift from what was published.
+ *
+ * ONE path, not two. This previously tried `./package.json` first and fell back to `../package.json`,
+ * with the fallback commented as "the published layout". Both layouts are the same layout: this file is
+ * only ever reached as `dist/cli.js` — `bin/slop-factory.mjs` resolves exactly that path, `files` ships
+ * `bin` and `dist`, and the manifest declares no `main` or `exports` for anything else to import. So
+ * `dist/package.json` never exists in either the working tree or the tarball, the first read always threw
+ * ENOENT, and the fallback always ran. A `try` whose body cannot succeed reads as handling a case that
+ * does not exist.
+ */
 async function readPackageVersion(): Promise<string> {
-  const manifestUrl = new URL('./package.json', import.meta.url)
+  // Relative to `dist/cli.js`, so one level up is the package root.
+  const manifestUrl = new URL('../package.json', import.meta.url)
   const { readFile } = await import('node:fs/promises')
-  try {
-    const manifest = JSON.parse(await readFile(manifestUrl, 'utf8')) as { version?: string }
-    return manifest.version ?? 'unknown'
-  } catch {
-    // In the published layout this file sits in `dist/`, one level below the manifest.
-    const parentManifestUrl = new URL('../package.json', import.meta.url)
-    const manifest = JSON.parse(await readFile(parentManifestUrl, 'utf8')) as { version?: string }
-    return manifest.version ?? 'unknown'
-  }
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8')) as { version?: string }
+  return manifest.version ?? 'unknown'
 }
 
 async function runGenerate(): Promise<number> {
@@ -80,10 +91,10 @@ async function runGenerate(): Promise<number> {
   const plop = await nodePlop(resolvePlopfilePath())
   const generator = plop.getGenerator(GENERATE_COMMAND)
 
-  // runPrompts drives inquirer, including the custom directory-browser prompt that plopfile.ts
-  // registers via plop.setPrompt. Answering is the only interactive part; nothing is written until it
-  // resolves, so abandoning the questions leaves no partial project behind — which is why the
-  // interruption path below can simply report and exit with nothing to clean up.
+  // runPrompts drives inquirer over the prompt list plopfile.ts declares — all of them stock `input`,
+  // `list` and `checkbox`; no prompt type is registered. Answering is the only interactive part; nothing
+  // is written until it resolves, so abandoning the questions leaves no partial project behind — which is
+  // why the interruption path below can simply report and exit with nothing to clean up.
   let answers: Record<string, unknown>
   try {
     answers = await generator.runPrompts()
