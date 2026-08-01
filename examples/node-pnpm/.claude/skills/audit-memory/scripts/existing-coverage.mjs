@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Promotion-awareness signal for the memory auditor. ~6 memory clusters are ALREADY
-// promoted to rules or skills, and the memories often say so. Re-proposing shipped
-// knowledge wastes review and risks contradicting the live rule. This reports two things
-// the agent must consult before proposing any rule:
+// Promotion-awareness signal for the memory auditor. In a corpus that has been audited
+// before, some clusters are ALREADY promoted to rules or skills, and the memories often
+// say so. Re-proposing shipped knowledge wastes review and risks contradicting the live
+// rule. This reports two things the agent must consult before proposing any rule:
 //
 //   (A) the existing rule inventory — what `.claude/rules/` already covers, with scope flags
 //   (B) per-memory promotion notes — memories that declare themselves (partly) promoted

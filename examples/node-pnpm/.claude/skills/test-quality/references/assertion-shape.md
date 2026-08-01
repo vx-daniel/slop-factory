@@ -121,7 +121,7 @@ For most plain-data tests, `toEqual` is the right default. `toStrictEqual` is fo
 
 When auditing a test suite, flag the following:
 
-1. **Suite-wide `toMatchObject` on a contract surface.** Grep ratio: `rg -c toMatchObject tests/ | rg -c toEqual tests/`. If the first is >> the second on a public-output codebase, the canonical-shape lock is probably missing.
+1. **Suite-wide `toMatchObject` on a contract surface.** Grep ratio: `rg -c --no-filename toMatchObject tests/ | paste -sd+ | bc` against the same for `toEqual`. Piping one `rg -c` into another does NOT work — the second `rg` re-scans the path argument and ignores stdin entirely, so it silently reports only the `toEqual` count. If the first is >> the second on a public-output codebase, the canonical-shape lock is probably missing.
 
 2. **No `toEqual` per public-output function.** For each exported function whose output is consumed externally, search for a test that locks the full shape with `toEqual`. Absence is a finding.
 

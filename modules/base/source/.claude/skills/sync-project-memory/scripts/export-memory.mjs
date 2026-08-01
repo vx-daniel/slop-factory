@@ -24,6 +24,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // Durable index header — MUST stay in sync with .claude/rules/agent-memory.md. Re-asserted on
 // every regen so a clobbered header self-heals. MEMORY_CURRENT.md is a sibling of this file.
@@ -222,4 +223,8 @@ function main() {
   process.stdout.write(`  wrote ${currentFileNames.length} current files to temp/ + MEMORY_CURRENT.md\n`)
 }
 
-main()
+// Run as a script only when invoked directly, not when imported elsewhere. The three sibling
+// scripts all guard this way; without it, importing this module runs the exporter as a side effect.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main()
+}

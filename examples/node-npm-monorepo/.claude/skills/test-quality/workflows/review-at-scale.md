@@ -1,6 +1,6 @@
 # Workflow: Review at scale
 
-Use this workflow when auditing more than one test file — a full test directory, a suite of N files, a whole package's tests. The single-file review workflow doesn't scale past ~5 files; mental mutation discipline applied N times serially exhausts context before useful synthesis.
+Use this workflow when auditing more than ~5 test files — a full test directory, a suite of N files, a whole package's tests. The single-file review workflow doesn't scale past ~5 files; mental mutation discipline applied N times serially exhausts context before useful synthesis.
 
 If you're reviewing 1 file or 1 PR, load `workflows/review-single.md` instead.
 

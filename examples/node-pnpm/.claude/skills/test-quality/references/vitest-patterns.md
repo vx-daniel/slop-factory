@@ -229,7 +229,7 @@ vitest run --coverage
 
 Vitest uses v8 coverage by default; istanbul is available via config. Coverage report appears in `coverage/` directory.
 
-**Important reminder:** coverage is a floor, not a ceiling. A 100% coverage report with weak assertions is fig-leaf coverage. See the main SKILL.md Section 2 "Coverage gaming detection."
+**Important reminder:** coverage is a floor, not a ceiling. A 100% coverage report with weak assertions is fig-leaf coverage. See `workflows/review-single.md` § "Step 5 — Coverage gaming detection".
 
 ## Common AI-generated mistakes specific to Vitest
 

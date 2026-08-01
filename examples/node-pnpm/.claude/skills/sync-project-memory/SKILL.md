@@ -52,21 +52,30 @@ their shared copy is the GitHub issue/PR (per `agent-memory.md`).
 
 2. **Read the plan.** Confirm the durable/current split looks right. If a `project_*` memory is
    actually a durable principle (or vice-versa), that's a misclassification — fix it at the source
-   by renaming the file to the correct prefix, then re-run. (Deep re-sorting is the L3 auditor's job;
-   for now the prefix is the contract.)
+   by renaming the file to the correct prefix, then re-run. (Deep re-sorting is the `audit-memory`
+   skill's job; for this script the prefix is the contract.)
 
 3. **Apply** once the plan is correct:
    ```bash
    node .claude/skills/sync-project-memory/scripts/export-memory.mjs --write
    ```
-   This copies durable files into `.claude/memory/` and regenerates `.claude/memory/MEMORY.md`
-   (durable index, with the persistent header re-asserted from `agent-memory.md`). It preserves
-   curated index hooks from the source `MEMORY.md` where present; otherwise synthesizes from each
-   file's frontmatter `description`.
+   This writes **both** halves of the split: durable files into `.claude/memory/` with a regenerated
+   `.claude/memory/MEMORY.md`, and `project_*` files into `.claude/memory/temp/` with a regenerated
+   `.claude/memory/MEMORY_CURRENT.md`. The durable index carries the persistent header, which lives as
+   `DURABLE_INDEX_HEADER` in this script — that constant is the source of truth, and
+   `.claude/rules/agent-memory.md` reproduces it for readers (a unit test holds the two identical).
+   The index preserves curated hooks from the **source** `MEMORY.md` where present; otherwise it
+   synthesizes from each file's frontmatter `description`.
 
 4. **Review the diff, then commit.** `git status .claude/memory/` — these are agent-knowledge files,
-   so commit them on their own focused commit (don't fold memory churn into a code PR). The script is
-   non-destructive to the source dir; safe to re-run.
+   so commit them on their own focused commit (don't fold memory churn into a code PR). Safe to
+   re-run: the source dir is never modified.
+
+   Two things `--write` does **not** do, both of which matter when re-running. It regenerates the
+   destination rather than merging into it, so a hand-edit to the committed `.claude/memory/MEMORY.md`
+   is overwritten — curate in the source index instead. And there is no deletion pass: a memory
+   removed at the source drops out of the regenerated index but its copied file stays behind, so
+   delete that by hand.
 
 ## Wiring the read path (close the loop)
 
@@ -77,21 +86,36 @@ Ensure that (idempotent — a no-op if already wired):
 node .claude/skills/sync-project-memory/scripts/ensure-claude-import.mjs --write
 ```
 
-Dry-run (no `--write`) reports present/missing without writing. Every local session and the CI
-reviewer load `CLAUDE.md`, so this one import is what makes the committed corpus actually reach
-them. Run it once per repo (or after any export); a future SessionStart hook can call it.
+Dry-run (no `--write`) reports present/missing without writing. If `CLAUDE.md` does not exist the
+script creates it; if it does, the section is inserted **above the first `## ` heading** rather than
+appended. Run it once per repo (or after any export); a future SessionStart hook can call it.
+
+This import is what reaches **local** sessions. It is not what reaches CI: the reviewer is headless
+and does not expand `@import`, so its workflow `Read`s `.claude/memory/MEMORY.md` directly — and only
+if this project was generated with the Claude workflows feature. See
+`.claude/rules/agent-memory.md` § "What actually loads, and when".
 
 ## Flags
 
+Per script — they do not share a parser, and passing one script another's flag is silently ignored
+rather than rejected, so a typo looks like a successful dry-run.
+
+`export-memory.mjs`:
 - `--write` — apply (default is dry-run).
-- `--source=DIR` — override the machine-local source (default: derived from the repo path).
+- `--source=DIR` — override the machine-local source (default: derived from the repo path, or the
+  `MEMORY_SOURCE_DIR` environment variable if set).
 - `--dest=DIR` — override the committed destination (default: `<repo>/.claude/memory`).
-- `--help`.
+- `--help` / `-h`.
+
+`ensure-claude-import.mjs`:
+- `--write` — apply (default is dry-run).
+- `--claude-md=PATH` — override the target (default: `<repo root>/CLAUDE.md`).
+- `--help` / `-h`.
 
 ## Boundaries (deliberately out of MVP scope)
 
-- **Local-dir merge-import** (committed → your local dir) — L2, and likely unnecessary now the
-  read path is the `CLAUDE.md` `@import`.
+- **Local-dir merge-import** (committed → your local dir) — likely unnecessary now the read path is
+  the `CLAUDE.md` `@import`.
 - **Auditor** (dedup, currency scan, distill durable → path-scoped rules) is the separate
   `audit-memory` skill (built) — not this skill's job.
 - **CI memory-hygiene reminder** (prompt retiring a spent `temp/` note when its issue's PR lands) — not yet built.

@@ -15,8 +15,9 @@ The export skill makes durable memories portable; this skill keeps the corpus *c
 recurring themes into the channel agents actually enforce — `.claude/rules/`. It is the judgment
 layer, so it is **propose-only by construction**: it writes a proposal to `.local/`, a human
 approves, and applying the approved rules is a separate, explicit step. Distilling memory into an
-always-on rule is the highest-blast-radius action in this repo (every session and the CI reviewer
-load rules) — the same propose-don't-auto-act posture `agent-memory.md` states: surface, don't auto-act.
+always-on rule is the highest-blast-radius action in this repo (it loads into every session, and into
+the CI reviewer too if this project was generated with the Claude workflows feature) — the same
+propose-don't-auto-act posture `agent-memory.md` states: surface, don't auto-act.
 
 The audience is **agents**. Optimize proposals for the next agent's recall and for context cost.
 
@@ -32,9 +33,18 @@ node .claude/skills/audit-memory/scripts/existing-coverage.mjs  # what's already
 - **`scan-currency`** flags supersession language ("superseded", "OVERTURNED", "no longer true").
   It **over-flags on purpose** ("stale branches", a "deprecated" code comment will hit) — that bias
   is correct for a gate. Treat each hit as "read this in full," not "this is stale."
-- **`existing-coverage`** lists the rule inventory (with scope: `always_on` / `path-scoped`) and the
-  memories that declare themselves promoted (they point at a shipped `.claude/rules/` file) — that
-  cluster is already covered; do not re-propose it.
+- **`existing-coverage`** lists the rule inventory — scope is reported as any combination of
+  `always_on`, `path-scoped` and `trigger_phrase`, or `unscoped` when a rule declares none — plus the
+  memories that *declare themselves* promoted. Read that second list as "likely UPDATE-or-skip", not
+  "covered, skip": the detector matches promotion language ("promoted to", "now a rule", a `→ skill`
+  arrow) as well as literal `.claude/rules/` paths, so a hit may point at a skill, or at nothing. The
+  coverage-gate in Step 3 is where you decide which.
+
+Both scripts read `.claude/memory/` and **exit non-zero if it does not exist**, so run the export
+skill first in a project that has never synced. Both are also non-recursive: they scan the top level
+only, so nothing under `.claude/memory/temp/` is visible to either. Point them elsewhere with
+`--memory=DIR` / `--rules=DIR` (`existing-coverage`) or `--source=DIR` (`scan-currency`); both take
+`--help`.
 
 ## Step 2 — cluster the durable memories by theme
 
@@ -56,9 +66,9 @@ would collapse into one principle. Name each cluster in one line.
 
    | Cluster is about… | Destination | Why |
    |---|---|---|
-   | reviewing a diff (correctness, wire/firmware contract, tests) | **path-scoped rule** (`paths:` for the relevant files) | CI reviewer auto-loads it exactly when reviewing those files; out of context otherwise |
+   | reviewing a diff (correctness, an interface contract, tests) | **path-scoped rule** (`paths:` for the relevant files) | a path-scoped rule loads exactly when those files are in play; out of context otherwise |
    | a universal authoring principle (verify-before-claim, no magic values) | **`always_on` rule** | genuinely applies to every change |
-   | workflow/process (git hygiene, AskUserQuestion, plans-location) | **CLAUDE.md section** or **stays memory** | useful to authors, *noise* as a review rule — keep it out of `.claude/rules/` |
+   | workflow/process (git hygiene, when to ask the user) | **CLAUDE.md section** or **stays memory** | useful to authors, *noise* as a review rule — keep it out of `.claude/rules/` |
    | a multi-step procedure | **skill** | loads on demand, not every session |
 
 4. **Draft + provenance.** Draft the artifact (rule text with frontmatter matching the repo
@@ -72,7 +82,7 @@ Write one report to `.local/plans/memory-audit-<date>.md`. Each actionable recom
 the review step can act on directly — it carries an editable decision header:
 
 ```markdown
-### C4 — Git/PR workflow → CLAUDE.md section
+### C1 — <cluster name> → <destination>
 Decision: pending        # set to: approve | deny | edit
 Notes:                   # optional — deny reason, or your replacement text if Decision: edit
 Members: <source memories>
@@ -131,5 +141,9 @@ Applying is never automatic — it waits for the user's go-ahead after the walk-
 ## Boundaries
 
 Dedup and re-sort (durable↔current) and archival of spent `temp/` memories are part of the auditor's
-hygiene remit — surface them in the proposal, but apply only on approval. Realizing the local
-two-index split and `temp/` sync are separate (sync skill / roadmap), not this skill's job.
+hygiene remit — surface them in the proposal, but apply only on approval. Note that neither helper
+script sees `temp/`: both scan the top level of `.claude/memory/` only, so any judgment about spent
+current-task notes is yours to make by reading them, not something Step 1 will hand you.
+
+Producing the two-index split in the first place belongs to `sync-project-memory`, which builds both
+indices and the `temp/` tree — not this skill.

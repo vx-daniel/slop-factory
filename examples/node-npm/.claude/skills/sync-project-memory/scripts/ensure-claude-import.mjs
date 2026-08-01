@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Ensure CLAUDE.md imports the committed durable memory index, so the corpus auto-loads
-// in every session — local sessions AND the CI PR reviewer both load CLAUDE.md. This
-// closes the "read path" of the agent-memory mind-meld: export-memory.mjs *stages* the
-// corpus; this wires it so something actually loads it.
+// in local sessions. This closes the "read path" of the agent-memory mind-meld:
+// export-memory.mjs *stages* the corpus; this wires it so something actually loads it.
+//
+// The import covers LOCAL sessions only. CI is headless and does not expand `@import` —
+// CLAUDE.md reaches it as raw text — so the PR-review workflow `Read`s the index directly
+// instead. Don't "fix" this comment to claim CI picks the import up; it does not.
 //
 // Idempotent: if the @import is already present, it is a no-op. Safe to run on every
 // setup, after every export, or from a future SessionStart hook.
@@ -18,7 +21,7 @@ const IMPORT_LINE = '@.claude/memory/MEMORY.md'
 // Idempotency keys on IMPORT_LINE, so re-running never duplicates even if the prose drifts.
 const MEMORY_SECTION = `## Agent Memory
 
-This repo carries **committed agent memory** — durable, cross-session knowledge (receipts discipline, wire/firmware contract, test conventions) that lives with the code instead of in one machine's local Claude Code memory. The durable index is imported here so every session — including the CI PR reviewer, which loads \`CLAUDE.md\` — loads it:
+This repo carries **committed agent memory** — durable, cross-session knowledge (conventions, preferences, hard-won context) that lives with the code instead of in one machine's local Claude Code memory. The durable index is imported here so local sessions load it automatically:
 
 ${IMPORT_LINE}
 

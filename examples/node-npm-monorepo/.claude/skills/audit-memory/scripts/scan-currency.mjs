@@ -79,8 +79,9 @@ function main() {
         'Usage: node scan-currency.mjs [--source=DIR]',
         '',
         '  --source=DIR  memory dir to scan (default: <repo>/.claude/memory).',
-        '                Point at the machine-local dir for meaningful fs ages; the',
-        '                committed corpus shares one import-commit date.',
+        '                Ages come from git, not the filesystem, so a dir outside the',
+        '                repo reports no date at all. The committed corpus shares one',
+        '                import-commit date, which is why the date is a weak hint only.',
         ''
       ].join('\n')
     )

@@ -24,6 +24,10 @@ These require understanding context — test block scope, mock proportion, seman
 
 ### Assertion-strength
 
+The script greps three of these as LOW (`toBeDefined`, `toBeTruthy`, `not.toThrow`) — it can spot the
+*pattern* but not whether it is the test's ONLY assertion, which is the part that makes it a fig leaf.
+That judgment is why they are listed here. `.toBeFalsy()` it does not grep at all.
+
 - [ ] **`expect(x).toBeDefined()` as the only assertion** in a test — verifies presence, not correctness.
 - [ ] **`expect(x).toBeTruthy()` / `.toBeFalsy()`** — passes for any non-empty/empty value. Prefer specific equality.
 - [ ] **`expect(() => fn()).not.toThrow()` as the only assertion** — verifies no crash, not correct output.
@@ -61,7 +65,7 @@ These require understanding context — test block scope, mock proportion, seman
 
 When reporting fig-leaf signals:
 
-- **HIGH**: signals from the script's Tier 1 list (deterministic, no judgment required). Also: `toMatchObject({})`, mock-existence assertions on production-critical code, tests that have never failed.
+- **HIGH**: deterministic violations the script is confident about — committed `.only` / `.skip`, `@ts-ignore`, empty `catch`. Note the script does NOT emit HIGH for everything it finds: `.todo()`, `@ts-expect-error` and snapshot-without-sibling are MEDIUM, and all three weak-assertion patterns are LOW. Read the severity the script printed rather than assuming its list is uniform. Also: `toMatchObject({})`, mock-existence assertions on production-critical code, tests that have never failed.
 - **MEDIUM**: judgment-required signals where the smell is clear in context (toMatchObject-only on a known contract surface, mock setup > 50%, tautological assertion).
 - **LOW**: judgment-required signals where context might justify the pattern (toBeDefined as part of broader assertions, `not.toThrow` paired with output check, single-test files for low-risk simple functions).
 

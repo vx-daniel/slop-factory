@@ -6,15 +6,21 @@ Canonical AI guidance for bun:test does not exist in the same form Vitest provid
 
 ## Identifying bun:test
 
-A project is using bun:test if any of these are true:
-- Tests import from `bun:test` (`import { test, expect, mock } from 'bun:test'`)
-- `package.json` has a `test` script invoking `bun test`
+A project is using bun:test if BOTH of these hold:
 - `bunfig.toml` exists with a `[test]` section
-- The project uses Bun as its runtime (`bun.lockb` or `bun.lock` present, `bun` is the package manager)
+- `package.json` has a `test` script invoking `bun test`
 
-Bun's test runner is the default test framework when using Bun. There is no separate "install vitest" or "install jest" — bun:test ships with the Bun runtime.
+**Do not identify the runner from the import specifier.** It is tempting to look for
+`import { test, expect, mock } from 'bun:test'`, and in many codebases that works — but this
+blueprint's bun projects deliberately import from `'vitest'` instead, with a `test/vitest-shim.d.ts`
+mapping that specifier onto `bun:test` so one set of test files runs under either runner. A project
+whose tests never mention `bun:test` can still be a bun:test project.
 
-If you cannot confirm bun:test by one of these checks, do not assume bun:test. Vitest projects may also use Bun as a package manager — verify the test framework from the test imports, not the package manager.
+The reverse also happens: a project may use Bun purely as the package manager while running Vitest.
+That is why the `test` script, not the lockfile and not the imports, is the deciding signal.
+
+bun:test ships with the Bun runtime — there is no separate "install vitest" or "install jest" step —
+but shipping with it is not the same as being the configured runner.
 
 ## `mock`, not `jest.fn` or `vi.fn`
 
@@ -48,13 +54,13 @@ When test file A uses `mock.module` to partially stub a module, then test file B
 
 ```ts
 // File A: tests/foo.test.ts
-mock.module('@app/services/mastra', () => ({
-  mastra: { getStorage: () => ({ ... }) }
-})) // only stubbed `mastra`
+mock.module('@app/services/store', () => ({
+  store: { getStorage: () => ({ ... }) }
+})) // only stubbed `store`
 
 // File B: tests/bar.test.ts (loaded later in the same `bun test` run)
-import { getMastra } from '@app/services/mastra'
-// getMastra is now `undefined` — File A's mock replaced the entire module
+import { getStore } from '@app/services/store'
+// getStore is now `undefined` — File A's mock replaced the entire module
 // File B fails with cryptic error, even though it never touched the mock
 ```
 
@@ -63,13 +69,13 @@ import { getMastra } from '@app/services/mastra'
 When using `mock.module`, mock the **full public surface** of the target module — every named export. Use `keyof typeof import(...)` to enforce coverage at the type level. If a test only exercises one export, still stub the others with benign defaults:
 
 ```ts
-mock.module('@app/services/mastra', () => ({
-  mastra: { getStorage: () => ({ ... }) },
-  getMastra: () => ({ getStorage: () => ({ ... }) }),
-  hasMastra: () => true,
-  setMastraProject: async () => {},
-  teardownMastra: async () => {},
-  MastraNotReadyError: class extends Error {
+mock.module('@app/services/store', () => ({
+  store: { getStorage: () => ({ ... }) },
+  getStore: () => ({ getStorage: () => ({ ... }) }),
+  hasStore: () => true,
+  setStoreProject: async () => {},
+  teardownStore: async () => {},
+  StoreNotReadyError: class extends Error {
     constructor() { super('mock') }
   },
 }))
@@ -106,7 +112,7 @@ When you see these symptoms in a bun:test run, suspect mock.module pollution:
 - "Unhandled error between tests" messages
 - Cryptic SyntaxErrors in files that haven't been modified
 - A test suite that passes when files are run individually but fails when run all together
-- Adding `--filter` for the failing test makes it pass
+- Adding `-t` to isolate the failing test makes it pass
 
 Grep the test suite for `mock.module` calls. Each one is a potential source.
 
@@ -163,14 +169,14 @@ To "restore" a `mock.module` call, you must call `mock.module(path, () => realIm
 
 Vitest's `restoreMocks: true` config has no direct bun:test equivalent. Restoration must be explicit in `afterEach`.
 
-## `bun test --filter` / `--only`
+## `bun test -t` / `--only`
 
 Focus a run on specific tests:
 
 ```bash
 bun test                          # run all tests
 bun test tests/specific.test.ts   # run a specific file
-bun test --filter "createUser"    # run tests whose names match
+bun test -t "createUser"          # run tests whose names match the regex
 bun test --only                   # only run tests marked .only
 ```
 
@@ -198,9 +204,14 @@ If you have any module-level singletons, environment variable reads, or file sys
 - Use per-test temp directories (`Bun.file`-friendly temp paths)
 - Don't rely on insertion order in any global map / set / cache
 
-## No `vi.useFakeTimers` equivalent yet
+## Time control differs from Vitest's
 
-As of this writing, bun:test does not have a built-in fake timer system. `vi.useFakeTimers()` has no direct port.
+bun:test has no `vi` namespace, so `vi.useFakeTimers()` has no direct port — but it is not true that
+Bun cannot control time. `bun:test` exports **`setSystemTime`** for moving the clock, and a `jest`
+compatibility object carrying `jest.useFakeTimers()` / `jest.setSystemTime()`. Reach for those before
+reaching for a library.
+
+Remaining gaps and workarounds:
 
 Workarounds:
 
@@ -242,7 +253,7 @@ bun:test snapshot APIs:
 
 Custom serializers and snapshot formatters work differently from Vitest. If a test fails with a serialization-related error after AI generation, check whether the snapshot syntax matches bun:test's expectations rather than Vitest's.
 
-Snapshot anti-patterns from the main SKILL.md apply: use inline snapshots for small structural assertions; never `toMatchSnapshot` against arbitrary large outputs without diff inspection.
+Snapshot anti-patterns from `workflows/review-single.md` § "Step 7 — Snapshot anti-patterns" apply: use inline snapshots for small structural assertions; never `toMatchSnapshot` against arbitrary large outputs without diff inspection.
 
 ## Async patterns
 
@@ -277,7 +288,12 @@ Forgetting `await` on `.resolves` / `.rejects` is the same silent-failure trap a
 bun test --coverage
 ```
 
-Bun's coverage tooling is newer than Vitest's; some features (HTML reports, threshold gating) may differ. Check the version-current Bun docs.
+Bun's coverage differs from Vitest's in two ways that matter for judging a coverage number, both measured against this blueprint's own `bunfig.toml`:
+
+- **There is no branch or statement metric** — Bun reports `% Funcs` and `% Lines` only. Principle 4's "read the branch percentage" is simply unavailable here, so a `??`/`||`/ternary with one side untaken cannot be detected from the coverage table at all.
+- **Only files a test imports are measured.** An untested module is absent from the table rather than reported at 0%, so the total can read 100% while whole files go unexercised. A coverage floor cannot catch an orphaned file; only a look at the file list can.
+
+Threshold gating itself does work (`coverageThreshold` in `bunfig.toml`).
 
 Same reminder as in the main SKILL.md: coverage is a floor. 100% line coverage with weak assertions is fig-leaf coverage.
 
@@ -285,7 +301,7 @@ Same reminder as in the main SKILL.md: coverage is a floor. 100% line coverage w
 
 | Mistake | Fix |
 |---|---|
-| `jest.fn()` or `vi.fn()` instead of `mock()` | Import `mock` from `bun:test`; use `mock(() => ...)` |
+| `vi.fn()` instead of `mock()` | Import `mock` from `bun:test`; use `mock(() => ...)`. (`jest.fn()` does work — bun:test ships a `jest` compatibility object — but `mock()` is the native spelling.) |
 | `jest.mock` or `vi.mock` instead of `mock.module` | Use `mock.module(path, factory)` |
 | `jest.spyOn` or `vi.spyOn` instead of `spyOn` | Import `spyOn` from `bun:test` |
 | Partial `mock.module` factory (missing exports) | Stub the full public surface; use a fixture file for complex cases |

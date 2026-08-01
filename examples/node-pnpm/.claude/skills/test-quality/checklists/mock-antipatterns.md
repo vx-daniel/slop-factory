@@ -1,6 +1,6 @@
 # Checklist: Mock anti-patterns
 
-Five named patterns AI most often falls into when writing tests with mocks. Each has a violation example, the reason it's wrong, the fix, and a detection rule.
+The five named patterns AI most often falls into when writing tests with mocks. Each has a violation example, the reason it's wrong, the fix, and a detection rule.
 
 Referenced from `workflows/generate.md` (write-time prevention) and `workflows/review-single.md` (review-time detection). Single source of truth for the mock-specific content.
 
@@ -54,8 +54,9 @@ export async function cleanupSession(session: Session) {
 
 **Violation:**
 ```ts
-test('detects duplicate server', () => {
-  mock('ToolCatalog', () => ({ discoverAndCacheTools: mockFn() }))
+test('detects duplicate server', async () => {
+  // Vitest: vi.mock — bun:test: mock.module. Either way, the whole module is replaced.
+  vi.mock('./server-catalog.js', () => ({ discoverAndCacheServers: vi.fn() }))
   await addServer(config)
   await addServer(config)  // should throw but won't — config never written!
 })
@@ -65,8 +66,9 @@ test('detects duplicate server', () => {
 
 **Fix:** Mock only external/slow operations. Preserve test dependencies.
 ```ts
-test('detects duplicate server', () => {
-  mock('MCPServerManager')  // mock the slow process startup only
+test('detects duplicate server', async () => {
+  // Stub only the slow process startup; leave the config write real.
+  vi.spyOn(processManager, 'start').mockResolvedValue(undefined)
   await addServer(config)   // config written ✓
   await addServer(config)   // duplicate detected ✓
 })
@@ -134,7 +136,10 @@ Complex mocks often indicate an integration test would be simpler, more valuable
 | Blind mocking | Cannot explain mock purpose | List side effects, mock minimally |
 | Incomplete mocks | Missing fields the production code reads | Include all documented fields |
 | Tests as afterthought | Implementation complete before tests written | TDD: failing test first |
-| Over-complex mocks | Setup > 50% of test | Use integration test |
+| Over-complex mocks* | Setup > 50% of test | Use integration test |
+
+\* Not one of the five numbered patterns above — a general over-mocking signal, included here because
+it is the one most often caught at review rather than at write time.
 
 ## Cross-references
 

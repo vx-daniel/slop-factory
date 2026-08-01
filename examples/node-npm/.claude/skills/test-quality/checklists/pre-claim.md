@@ -2,7 +2,7 @@
 
 Before any agent (or human) claims a piece of work is "tested," every item on this list must be satisfied.
 
-Single canonical pre-claim checklist. Referenced from each workflow.
+Single canonical pre-claim checklist. Referenced from `workflows/generate.md` and `workflows/review-single.md`.
 
 ## Tier 1 — automated
 
@@ -11,8 +11,13 @@ Single canonical pre-claim checklist. Referenced from each workflow.
 ## Tier 2 — judgment
 
 - [ ] **What bug would each test catch?** Stated in one sentence per test, naming a *specific* failure mode (a line, a condition, a contract violation). Generic claims do not pass this bar. See "Specific vs generic claims" below.
-- [ ] **Mental mutation pass complete.** For each test, at least one realistic mutation of the implementation has been considered and the test would catch it.
-- [ ] **TDD or equivalent confidence.** Either the test was written before the implementation and seen to fail, OR the implementation has been mentally broken and the test confirmed to fail in that broken state.
+- [ ] **Mutation pass complete — run it if the suite is cheap.** For each test, at least one realistic
+      mutation of the implementation has been applied and the test *watched* going red, then reverted.
+      Mental mutation is the fallback for a slow or non-deterministic suite only, and it is a
+      hypothesis rather than a receipt (see SKILL.md principle 5, "Prove the mutation; don't just
+      imagine it"). If you fell back to mental, say so when you report — do not let "considered" be
+      read as "verified".
+- [ ] **TDD or equivalent confidence.** Either the test was written before the implementation and seen to fail, OR the implementation has been broken and the test observed failing in that broken state.
 - [ ] **Tests run successfully on a clean working tree.** Not "tests look right" — tests have been executed and passed.
 - [ ] **Edge cases covered.** Empty / null / undefined / boundary / error inputs each have a test, where applicable.
 - [ ] **Contract surfaces have a canonical-shape lock.** If the code under test produces output consumed by downstream code, at least one test asserts the full shape with `toEqual` (or equivalent). See `references/assertion-shape.md`.

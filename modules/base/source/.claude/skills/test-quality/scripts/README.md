@@ -6,13 +6,17 @@ Catches the deterministic anti-patterns the skill enumerates without requiring L
 
 ## Requirements
 
-- bash 4+
+- bash 4+, plus GNU `xargs` — the script uses `xargs -d` / `-r`, which BSD/macOS `xargs` rejects (install `findutils` on macOS)
 - `ripgrep` (`rg`) — preferred, falls back to `grep` if unavailable
 - `git` — required only for `--diff` mode
 
 No install step. Make the script executable and invoke directly.
 
 ## Quick start
+
+Paths below are relative to this `scripts/` directory. From a project root the script is at
+`.claude/skills/test-quality/scripts/check-test-quality.sh`; the skill's workflows invoke it as
+`./scripts/check-test-quality.sh` from the skill root. All three name the same file.
 
 ```bash
 # scan all test files in the current directory
@@ -35,13 +39,13 @@ No install step. Make the script executable and invoke directly.
 
 | Code | Meaning |
 |---|---|
-| `0` | No findings, or findings present but `--strict` not set |
+| `0` | No findings; or findings present without `--strict`; or `--strict` set but no HIGH findings (MEDIUM and LOW never gate) |
 | `1` | HIGH-severity findings present AND `--strict` is set |
 | `2` | Script error (bad arguments, missing required tool, etc.) |
 
 ## Checks
 
-Each check has a name, a severity, and a target file pattern. Disable individual checks via `--check` with a comma-separated allowlist.
+Each check has a name, a severity, and a target file pattern. `--check` takes a comma-separated **allowlist** — naming a check runs only that one. There is no flag to disable a single check; select the ones you want instead.
 
 ### disabled-tests (HIGH / MEDIUM)
 
@@ -68,7 +72,7 @@ Applies only to `.ts` / `.tsx` test files.
 
 Catches two patterns:
 
-1. **Auto-update flags in test commands** — `vitest --update-snapshots`, `vitest -u`, `bun test -u`, etc. in `package.json` scripts or CI config files. Snapshots regenerated this way are committed without inspection.
+1. **Auto-update flags in test commands** in `package.json` scripts or CI config files — `vitest -u` / `vitest --update`, `bun test -u` / `bun test --update-snapshots`, `jest -u` / `jest --updateSnapshot`. The three tools spell the long form differently; the grep matches all of them. Snapshots regenerated this way are committed without inspection.
 
 2. **Snapshot files modified without sibling source changes** (`--diff` mode only) — a `.snap` file or `__snapshots__/` directory modified in a PR where no production source file in the same directory changed. Likely a snapshot regenerated without inspecting the diff.
 
@@ -90,7 +94,7 @@ Catches empty `catch` blocks in test files: `catch (e) {}` or `catch {}`. These 
 
 ### coverage-regression (MEDIUM, `--diff` mode only)
 
-Catches changes to `coverageThreshold` configuration in `vitest.config.ts` / `jest.config.js` / `bunfig.toml` / etc. that reduce or remove coverage requirements. Often legitimate (project moved coverage targets), but worth surfacing for explicit justification.
+Catches config changes that reduce or remove coverage requirements. The key differs per tool: Vitest nests `thresholds: { lines, branches, functions, statements }` under `test.coverage`, while `coverageThreshold` is the Jest and `bunfig.toml` spelling. The check greps the numeric threshold lines, so it catches both shapes. Often legitimate (the project moved its coverage targets), but worth surfacing for explicit justification.
 
 ## Severity vocabulary: HIGH/MEDIUM/LOW vs S1/S2/S3
 
@@ -134,7 +138,7 @@ For recommended usage, point the script at a scoped path:
 ./check-test-quality.sh                     # current dir (excludes the common build dirs)
 ```
 
-If you genuinely need to scan something inside `node_modules/`, edit `EXCLUDED_DIRS_REGEX` in the script or remove the exclusion filter.
+If you genuinely need to scan something inside `node_modules/`, edit the exclusion `grep -vE` pattern inside `collect_test_files` in the script, or remove that filter. It is an inline literal, not a named constant — there is no single variable to override.
 
 ## Flags
 
@@ -177,7 +181,7 @@ test-quality-screen:
 ```bash
 #!/usr/bin/env bash
 # .git/hooks/pre-commit
-./check-test-quality.sh --diff HEAD --strict
+./check-test-quality.sh --diff --cached --strict
 ```
 
 ## What this script deliberately does NOT do

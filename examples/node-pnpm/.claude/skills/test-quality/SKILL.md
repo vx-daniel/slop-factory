@@ -36,8 +36,8 @@ These apply at every stage. Internalize them before reading any workflow.
 1. **A test is a claim about behavior.** A broken implementation must fail it. If `return null` passes the test, the test is not testing.
 2. **"What bug would this test catch?"** State it in one sentence per test. The sentence must name a *specific* failure mode — a particular line, condition, or contract violation — not a generic statement ("catches bugs where the function returns wrong values" is content-free). *This is the single highest-leverage discipline in this skill, and the one most prone to soft-floor evasion.* See `checklists/pre-claim.md` "Specific vs generic claims" for the falsifier.
 3. **When a test fails, the default is the code is wrong, not the test.** Inverting that default requires written justification of the behavior change.
-4. **Coverage is a floor, not a ceiling.** 100% coverage with permissive assertions is the fig-leaf endgame. **And line coverage is not branch coverage:** a `??`, `||`, or ternary line reads as *covered* when only one side ever executed. Never cite a line-coverage number as evidence that a branch is exercised — read the branch percentage, or better, mutate the branch and rerun (principle 5). The `configuredEnv ?? provider.defaultCredentialEnv` shape is the canonical trap: the line is green, the config-override side is untested.
-5. **Prove the mutation; don't just imagine it — when running it is cheap.** The review discipline (`workflows/review-single.md` Step 2) asks you to *mentally* mutate the implementation and ask whether a test catches it. Mental mutation is a hypothesis, not a receipt, and it quietly reintroduces the "reasoning instead of evidence" failure mode. **Decision rule:** if the affected suite is fast and deterministic (pure logic, unit-level), *actually* apply the mutation — delete the branch or flip the operator, run the suite, confirm red, revert. If the suite is slow, flaky, or wide, use mental mutation to triage and schedule real mutation testing (Stryker) for the survivors. The empirical form is the "delete the implementation" stress test in `workflows/maintain-failing.md`; treat it as the default for cheap suites, not a rare diagnostic.
+4. **Coverage is a floor, not a ceiling.** 100% coverage with permissive assertions is the fig-leaf endgame. **And line coverage is not branch coverage:** a `??`, `||`, or ternary line reads as *covered* when only one side ever executed. Never cite a line-coverage number as evidence that a branch is exercised — read the branch percentage, or better, mutate the branch and rerun (principle 5). A `configuredValue ?? defaultValue` shape is the canonical trap: the line is green, the override side is untested.
+5. **Prove the mutation; don't just imagine it — when running it is cheap.** `workflows/review-single.md` Step 2 catalogues the mutations worth trying. Reasoning through one is a hypothesis, not a receipt, and it quietly reintroduces the "reasoning instead of evidence" failure mode. **Decision rule:** if the affected suite is fast and deterministic (pure logic, unit-level), *actually* apply the mutation — delete the branch or flip the operator, run the suite, confirm red, revert. If the suite is slow, flaky, or wide, use mental mutation to triage and schedule real mutation testing (Stryker) for the survivors. The empirical form is the "delete the implementation" stress test in `workflows/maintain-failing.md`; treat it as the default for cheap suites, not a rare diagnostic.
 
    **A surviving mutation is a question, not a finding.** Green after a mutation means one of two things: (a) the test has a gap, or (b) the code you mutated was redundant or dead. Distinguish before reporting — a "gap" that is actually dead code is a false positive, and the real finding is "delete this line." (Corollary: a test can also pass for the *wrong reason* — a per-tool budget test once went green-for-free because its setup magnitudes couldn't make the bug observable until the exhaustion direction was reversed. If a mutation won't go red, ask *why* before trusting the test.)
 6. **Verify the test file's claims about itself, not just the code.** If a docstring says "each rule is guarded" or a name says "validates X", apply the same mutation you would apply to the code: break the specific thing the comment names, and confirm a test goes red. A comment that overclaims is a latent fig-leaf — it tells the next agent that coverage exists when it does not. (Worked case: a normalization module's docstring claimed "each dropped rule turns a test red"; two of its rules were no-ops, so removing them turned nothing red — the comment guaranteed coverage the assertions never delivered.)
@@ -73,9 +73,20 @@ Identify the framework before writing code that imports from it. AI training dat
 
 | Project framework | Load |
 |---|---|
-| Vitest (`vitest.config.ts`, `vitest` in package.json) | `references/vitest-patterns.md` |
-| bun:test (imports from `bun:test`, `bunfig.toml`) | `references/bun-test-patterns.md` |
+| Vitest (`vitest.config.ts` present, `vitest` in `devDependencies`) | `references/vitest-patterns.md` |
+| bun:test (`bunfig.toml` present, `test` script runs `bun test`) | `references/bun-test-patterns.md` |
 | Other / unclear | Read existing tests to identify; do not guess |
+
+**Detect from the config and the `test` script, NOT from the import specifier.** This blueprint's
+`bun test` projects deliberately keep `import { describe, expect, it } from 'vitest'` — a
+`test/vitest-shim.d.ts` maps that specifier onto `bun:test` so the same test files run under either
+runner. So an `import … from 'vitest'` line proves nothing about the runner, and a project whose
+tests never mention `bun:test` may still be a bun:test project. Getting this backwards is not a
+harmless mislabel: it loads `vitest-patterns.md`, which tells you to write `vi.fn()` /
+`vi.useFakeTimers()`, and Bun has no `vi` namespace at all.
+
+The reliable tell is `bunfig.toml` beside a `test` script that runs `bun test`. When both a
+`vitest.config.ts` and a `bunfig.toml` exist, the `test` script decides.
 
 These references cover what AI tools commonly get wrong for each framework — namespaces, mock APIs, watch-mode behavior, async patterns, fake timers, snapshot conventions.
 
@@ -112,25 +123,17 @@ test-quality/
 
 ---
 
-## Project notes
+## Why this skill leans empirical
 
-This skill diverges from the upstream `test-quality-with-ai` in a few
-router-level ways, each earned from live reviews of this repo's suite (`search`,
-`reports`, `config-schema`, `research-loop`, `quota`, `run-progress`) where a
-mental-only discipline would have shipped a flawed review:
+Four of its positions are deliberate departures from the usual "read the tests carefully" advice.
+Each exists because a mental-only discipline demonstrably passes tests that a run does not:
 
-- **Principle 4** names the branch-vs-line coverage trap — a `??`/`||`/ternary
-  line reads *covered* when only one side ran, so line coverage is not branch
-  coverage (a near-miss on `search.ts:54`).
-- **Principle 5** makes empirical mutation the default on cheap suites, and adds
-  "a surviving mutation is a question, not a finding" — green can mean dead code,
-  not a test gap (the `run-progress` no-op lines; the `quota` green-for-free test).
-- **Failure mode 3 + principle 6** add self-description drift — a test file's
-  prose claiming a guarantee its assertions do not deliver (`run-progress`'s
-  docstring claimed "each dropped rule turns a test red"; two rules were no-ops).
-- **Framework references** load only in code-producing workflows, not pure reviews.
-
-Deeper changes still belong in the workflow files and are not yet made here:
-promoting empirical mutation into `review-single.md` Step 2; a Stryker-first step
-for `review-at-scale.md` on fast suites; a quality-vs-presence scope note; and a
-"RED must fail on the assertion, not a setup crash" note in `generate.md`.
+- **Principle 4 — branch coverage is not line coverage.** A `??` / `||` / ternary line reads
+  *covered* when only one side ever ran. Reading the line count hides the untaken branch.
+- **Principle 5 — empirical mutation is the default on cheap suites**, plus "a surviving mutation is
+  a question, not a finding". Green after a mutation can mean the mutated code is dead, not that a
+  test is missing — investigate before filing.
+- **Failure mode 3 + principle 6 — self-description drift.** A test file's prose claims a guarantee
+  its assertions do not deliver: a docstring asserting "each dropped rule turns a test red" while
+  two of those rules are no-ops. Names and comments are not evidence.
+- **Framework references load only in code-producing workflows**, not pure reviews.

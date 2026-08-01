@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Guards the two claims in the shipped agent rules that can go stale WITHOUT anyone editing the rules.
+ * Guards the claims in the shipped `.claude/` payload that can go stale WITHOUT anyone editing it.
  *
  * `modules/base/source/.claude/rules/` ships into every generated project and is loaded as authoritative
  * by agents and by the PR-review workflow. Its prose describes artifacts owned by OTHER modules — the
@@ -22,13 +22,20 @@ import { describe, expect, it } from 'vitest'
  * forms — a fenced ```markdown block and a `const` template literal — that surrounding explanation cannot
  * produce.
  *
- * MUTATION-TESTED. Both were watched failing before this file was committed: flipping `useExplicitType`
- * to `error` in the shipped `biome.json` reddened the first, and changing one word inside
- * `DURABLE_INDEX_HEADER` reddened the second.
+ * A third guard covers the shipped skills rather than the rules: a `.sh` helper that its own docs invoke
+ * as `./scripts/…` must carry the execute bit, because `fs.cp` preserves modes and a 644 source file
+ * reaches every generated project unrunnable. That is not hypothetical — `check-test-quality.sh` shipped
+ * that way, and the documented command failed with "Permission denied" in all four examples.
+ *
+ * MUTATION-TESTED. All three were watched failing before being committed: flipping `useExplicitType` to
+ * `error` in the shipped `biome.json`, changing one word inside `DURABLE_INDEX_HEADER`, and `chmod -x` on
+ * the shell script each reddened exactly one test, and each was restored.
  */
 
 const SHIPPED_BIOME_CONFIG_PATH = path.resolve(import.meta.dirname, '..', 'gate', 'source', 'biome.json')
 const SHIPPED_RULES_DIRECTORY = path.join(import.meta.dirname, 'source', '.claude', 'rules')
+const SHIPPED_SKILLS_DIRECTORY = path.join(import.meta.dirname, 'source', '.claude', 'skills')
+const OWNER_EXECUTE_BIT = 0o100
 const AGENT_MEMORY_RULE_PATH = path.join(SHIPPED_RULES_DIRECTORY, 'agent-memory.md')
 const EXPORT_MEMORY_SCRIPT_PATH = path.join(
   import.meta.dirname,
@@ -109,6 +116,22 @@ async function citedBiomeRuleNames(configuredRuleNames: readonly string[]): Prom
     }
   }
   return citedRuleNames
+}
+
+/** Every `.sh` file under any shipped skill's `scripts/` directory. */
+async function shippedShellScriptPaths(): Promise<string[]> {
+  const { readdir } = await import('node:fs/promises')
+  const scriptPaths: string[] = []
+
+  for (const skillName of await readdir(SHIPPED_SKILLS_DIRECTORY)) {
+    const scriptsDirectory = path.join(SHIPPED_SKILLS_DIRECTORY, skillName, 'scripts')
+    // A skill without a scripts/ directory is normal, not a failure.
+    const scriptNames = await readdir(scriptsDirectory).catch(() => [] as string[])
+    for (const scriptName of scriptNames) {
+      if (scriptName.endsWith('.sh')) scriptPaths.push(path.join(scriptsDirectory, scriptName))
+    }
+  }
+  return scriptPaths
 }
 
 /** Pulls the single fenced ```markdown block out of `agent-memory.md`. */
@@ -192,5 +215,33 @@ describe('the MEMORY.md durable header', () => {
       'agent-memory.md and export-memory.mjs disagree about the durable MEMORY.md header. The script is ' +
         'authoritative (it writes the file); update the fenced block in the rule to match it verbatim.',
     ).toBe(writtenHeader?.trimEnd())
+  })
+})
+
+describe('shipped skill scripts', () => {
+  it('are executable when their docs invoke them as ./path', async () => {
+    // `fs.cp` preserves modes (see plopfile.ts), so a source file committed 644 reaches every
+    // generated project 644. `check-test-quality.sh` shipped that way while SKILL.md, both review
+    // workflows and the pre-claim checklist all invoke it as `./scripts/check-test-quality.sh` —
+    // which fails with "Permission denied" in a freshly generated project.
+    //
+    // The rule this encodes: a shipped script with a shebang that any doc invokes via `./` must
+    // carry the owner-execute bit. `.mjs` helpers are exempt because their docs run them as
+    // `node <path>`, where the mode is irrelevant.
+    const { stat } = await import('node:fs/promises')
+    const scriptPaths = await shippedShellScriptPaths()
+
+    expect(scriptPaths.length, 'no shipped .sh scripts found — has the skills tree moved?').toBeGreaterThan(0)
+
+    const modes = await Promise.all(scriptPaths.map(async (scriptPath) => (await stat(scriptPath)).mode))
+    const nonExecutablePaths = scriptPaths
+      .filter((_, index) => ((modes[index] ?? 0) & OWNER_EXECUTE_BIT) === 0)
+      .map((scriptPath) => path.relative(SHIPPED_SKILLS_DIRECTORY, scriptPath))
+
+    expect(
+      nonExecutablePaths,
+      'these shipped shell scripts are not executable, so the `./…` invocations in their own docs ' +
+        `fail with "Permission denied" in every generated project: ${nonExecutablePaths.join(', ')}`,
+    ).toEqual([])
   })
 })

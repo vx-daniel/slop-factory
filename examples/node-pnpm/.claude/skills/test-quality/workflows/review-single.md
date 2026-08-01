@@ -21,11 +21,17 @@ Run the bundled script first. It catches deterministic signals (`.only`, `@ts-ex
 
 Address any HIGH-severity findings before continuing with the deeper review. They're cheap to fix and resolving them removes noise from the rest of the review.
 
-## Step 2 — The mental mutation discipline
+## Step 2 — The mutation discipline
 
-The single highest-leverage technique. For each test, imagine specific mutations to the implementation. Does any test catch them?
+The single highest-leverage technique. For each test, identify specific mutations to the
+implementation and establish whether any test catches them.
 
-**Mutations to try mentally:**
+**Apply them for real when the suite is fast and deterministic** — edit, run, watch red, revert. That
+is the receipt. Reason through them only when running is genuinely impractical (a slow, flaky, or
+non-deterministic suite), and label the result as a hypothesis when you report it. See SKILL.md
+principle 5. The mutations below are the catalogue either way.
+
+**Mutations to try:**
 - Replace the function body with `return null`, `return ""`, `return []`, `return 0`, or `return true`.
 - Flip a comparison operator: `>` → `>=`, `===` → `!==`.
 - Off-by-one: change `i < n` to `i <= n` or `i < n - 1`.
@@ -36,7 +42,7 @@ The single highest-leverage technique. For each test, imagine specific mutations
 
 For each mutation that would clearly break the function's contract — does any test fail? If not, the test suite has a gap. Note it; surface in the review.
 
-The formal version of this technique is **mutation testing** (Stryker for JS/TS). The mental discipline produces a meaningful fraction of mutation testing's value without the setup cost — exact proportion depends on suite size and reviewer thoroughness, and no rigorous study has been cited; Stryker's published bug-detection numbers are the source of truth for the formal approach. The mental discipline's value is that it costs zero infrastructure, so it can be applied during code review every time, not just on scheduled runs.
+The formal version of this technique is **mutation testing** (Stryker for JS/TS). Even reasoned through rather than run, this discipline produces a meaningful fraction of mutation testing's value without the setup cost — exact proportion depends on suite size and reviewer thoroughness, and no rigorous study has been cited; Stryker's published bug-detection numbers are the source of truth for the formal approach. The mental discipline's value is that it costs zero infrastructure, so it can be applied during code review every time, not just on scheduled runs.
 
 ## Step 3 — Apply the checklists
 
