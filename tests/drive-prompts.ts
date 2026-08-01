@@ -55,6 +55,9 @@ export const DOWN_ARROW = '\u001B[B'
  * `process.kill(process.pid, 'SIGINT')` (`inquirer/lib/ui/baseUI.js:32`), so sending this in-process kills
  * the Vitest worker rather than the prompt. It stays here so the next person reaches for it, finds this
  * comment, and does not rediscover that the hard way — see `interactive-cli.test.ts`'s header.
+ *
+ * The same self-kill is why the CLI's own interruption path never runs under a real Ctrl-C (#50). Do not
+ * "fix" a test to reach it; the production code is what needs the SIGINT handler.
  */
 export const CONTROL_C = '\u0003'
 /**

@@ -23,9 +23,17 @@ import { BACKSPACE, DOWN_ARROW, drivePrompts, ENTER } from './drive-prompts.js'
  * is a worse outcome than the gap. Ctrl-C therefore needs a real subprocess with a pseudo-terminal, which
  * is what the remaining part of #44 is for.
  *
- * So the interruption path is covered in halves, and neither half is this file: `cli.test.ts` proves
- * `isPromptInterruption` accepts the three error shapes inquirer produces, and nothing yet proves a real
- * Ctrl-C produces one of them or that the exit code is 130.
+ * AND A PSEUDO-TERMINAL SPIKE FOUND THE PATH DOES NOT WORK AT ALL. Driving the real binary under a PTY and
+ * pressing Ctrl-C, three runs out of three: the process is killed BY SIGNAL (signal 2, exit code 0) and
+ * "Cancelled — nothing was written." never prints. inquirer's force-close raises SIGINT on the process
+ * itself, `cli.ts` installs no handler for it, and Node's default action terminates — so the `catch` never
+ * runs, `isPromptInterruption` is never consulted, and `EXIT_CODE_INTERRUPTED` is never returned. A shell
+ * reports 130 for a signal-2 death, which is the same number that constant holds, which is presumably why
+ * nobody noticed.
+ *
+ * So the interruption path is covered in halves that do not meet: `cli.test.ts` proves
+ * `isPromptInterruption` accepts three error shapes, and a real Ctrl-C produces none of them. That is a
+ * defect rather than a coverage gap — see #50, which the spike rewrote.
  */
 
 /** Distinctive fragments of each prompt's own message, used to wait for it and to assert it appeared. */
