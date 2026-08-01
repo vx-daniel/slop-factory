@@ -73,6 +73,64 @@ async function readPackageVersion(): Promise<string> {
   return manifest.version ?? 'unknown'
 }
 
+/** How often the keep-alive timer wakes while waiting for an interruption, in milliseconds. */
+const KEEP_ALIVE_INTERVAL_MS = 250
+
+/** Distinguishes "the operator interrupted" from any answer set, in the race below. */
+const INTERRUPTED = Symbol('interrupted')
+
+/**
+ * Listens for the SIGINT a Ctrl-C at a prompt produces, until told to stop.
+ *
+ * WHY THIS IS NEEDED AT ALL, measured with a pseudo-terminal (#50). inquirer's force-close handler ends
+ * with `process.kill(process.pid, 'SIGINT')` (`inquirer/lib/ui/baseUI.js`). With no listener for that
+ * signal, Node's default action terminates the process outright: `runPrompts` never settles, the `catch`
+ * below never runs, and "Cancelled — nothing was written." was never printed. Three runs of three, killed
+ * by signal 2 with exit code 0.
+ *
+ * That went unnoticed because a shell reports 130 for a signal-2 death — the same number
+ * `EXIT_CODE_INTERRUPTED` holds. `echo $?` looked exactly right for the wrong reason, and the only symptom
+ * was a message that was not there.
+ *
+ * `once`, not `on`, so the CLI stays killable: a second Ctrl-C finds no listener and gets Node's default
+ * action. The first one is handled; holding the signal after that would be a bug of its own.
+ */
+function listenForInterruption(): { readonly interrupted: Promise<typeof INTERRUPTED>; stop: () => void } {
+  // Assigned synchronously by the executor below, before the promise is returned. The placeholder exists
+  // only so the binding needs no definite-assignment assertion.
+  let reportInterrupted: (interrupted: typeof INTERRUPTED) => void = () => undefined
+  const interrupted = new Promise<typeof INTERRUPTED>((resolve) => {
+    reportInterrupted = resolve
+  })
+
+  const onInterrupt = (): void => {
+    reportInterrupted(INTERRUPTED)
+  }
+  process.once('SIGINT', onInterrupt)
+
+  /**
+   * Holds the event loop open while the interruption is delivered, and nothing else.
+   *
+   * MEASURED, and the reason this fix did not work without it. A JS listener changes SIGINT from an
+   * immediate kernel-level termination into an event QUEUED on the loop — but inquirer's force-close
+   * closes the readline and pauses stdin BEFORE raising it, so by then the loop has nothing left to run.
+   * Node sees an empty loop with a pending top-level await and exits 13 instead of delivering the signal:
+   * handler never called, message never printed, three runs of three.
+   *
+   * A single ref'd timer is enough to keep the loop alive for the one tick it takes. It is cleared in
+   * `stop()`, which runs in a `finally`, so it can never hold the process open on any path.
+   */
+  const keepLoopAliveForSignal = setInterval(() => undefined, KEEP_ALIVE_INTERVAL_MS)
+
+  return {
+    interrupted,
+    stop: (): void => {
+      clearInterval(keepLoopAliveForSignal)
+      process.removeListener('SIGINT', onInterrupt)
+    },
+  }
+}
+
 async function runGenerate(): Promise<number> {
   // `generate` is interactive by design — every answer comes from a prompt, and there are no flags to
   // supply them non-interactively. Without a terminal, inquirer renders the first question, hits EOF,
@@ -94,17 +152,38 @@ async function runGenerate(): Promise<number> {
   // runPrompts drives inquirer over the prompt list plopfile.ts declares — all of them stock `input`,
   // `list` and `checkbox`; no prompt type is registered. Answering is the only interactive part; nothing
   // is written until it resolves, so abandoning the questions leaves no partial project behind — which is
-  // why the interruption path below can simply report and exit with nothing to clean up.
-  let answers: Record<string, unknown>
+  // why both interruption paths below can simply report and exit with nothing to clean up.
+  //
+  // TWO PATHS, because an abandoned session arrives two different ways. Ctrl-C raises a SIGNAL, which only
+  // a signal listener can see — see `listenForInterruption`. A closed stdin instead REJECTS the promise,
+  // which is what `isPromptInterruption` is for. Neither one catches the other.
+  //
+  // The listener is removed before the actions run. During generation "nothing was written" would be a
+  // lie, and Ctrl-C there should keep its default meaning rather than print a false reassurance.
+  const interruption = listenForInterruption()
+  let outcome: Record<string, unknown> | typeof INTERRUPTED
   try {
-    answers = await generator.runPrompts()
+    const prompted = generator.runPrompts()
+    // If the interrupt wins the race, a rejection arriving afterwards has nobody left to catch it. This
+    // second handler is a no-op; the race still sees the rejection and the `catch` below still runs.
+    void prompted.catch(() => undefined)
+
+    outcome = await Promise.race([prompted, interruption.interrupted])
   } catch (error) {
     if (isPromptInterruption(error)) {
       process.stderr.write('\nCancelled — nothing was written.\n')
       return EXIT_CODE_INTERRUPTED
     }
     throw error
+  } finally {
+    interruption.stop()
   }
+
+  if (outcome === INTERRUPTED) {
+    process.stderr.write('\nCancelled — nothing was written.\n')
+    return EXIT_CODE_INTERRUPTED
+  }
+  const answers = outcome
 
   const results = await generator.runActions(answers)
 
