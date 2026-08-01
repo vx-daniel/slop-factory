@@ -20,18 +20,29 @@ the durable half portable:
 The audience for everything below is **agents**, not humans — optimize for the next agent's recall and
 for context cost.
 
-## Not yet wired in this repo (be honest about the gap)
+## What actually loads, and when (be honest about the gap)
 
-The **convention** below applies now. The auto-load plumbing does **not** exist here yet:
+The **convention** below applies now. How the committed corpus *reaches* a reader differs by reader,
+and one of the three paths does not exist until you create it:
 
-- `CLAUDE.md` has **no `@import`** of the durable index, so committed memory is *shareable via the
-  repo* but not auto-loaded into local sessions until that import is added.
-- `.github/workflows/claude-pr-review.yml` does **not** `Read` the memory index, so the CI reviewer
-  does not see committed memory yet.
-- `.claude/memory/` does not exist until `sync-project-memory` first creates it.
+- **`.claude/memory/` does not exist until `sync-project-memory` first creates it.** Until then there
+  is no corpus to load, and this rule describes a convention rather than a state of the repo.
+- **Local sessions — auto-loaded, once the import is in place.** A `CLAUDE.md` `@import` of
+  `.claude/memory/MEMORY.md` makes the durable index load in every local session.
+  `sync-project-memory` adds that import for you (`ensure-claude-import.mjs --write`); it is not
+  present in a freshly generated project, so check before assuming a teammate's session sees it.
+- **CI review — read explicitly, not imported.** The CI reviewer is headless and does **not** expand
+  `@import`; `CLAUDE.md` reaches it as raw text. The review workflow therefore `Read`s
+  `.claude/memory/MEMORY.md` directly. That workflow only exists if this project was generated with
+  the Claude workflows feature — without it there is no CI reviewer to see the corpus at all.
 
-Until those land, treat committed memory as a shared artifact you (or the reviewer) must open
-explicitly — not as always-loaded context. Don't write rules or PR text that assume auto-load.
+The gap that remains is the **import** direction: nothing pulls the committed corpus back into a
+machine-local memory dir, so a teammate who clones the repo reads the index rather than gaining it as
+their own auto-memory.
+
+Practical consequence: the durable index is the only part with a reliable path to another reader.
+Anything under `temp/` is opened deliberately or not at all — so don't write rules or PR text that
+assume a current-task note has been seen.
 
 ## Two indices — classify at write time
 
@@ -57,13 +68,20 @@ every session as if it were a standing rule.
 the next agent the split exists and points at the current-task index. `sync-project-memory` re-asserts
 it on each regeneration, so a clobbered header self-heals on the next sync — but don't rely on that.
 
+The block below is reproduced **verbatim, wrapping included**, from `DURABLE_INDEX_HEADER` in
+`sync-project-memory/scripts/export-memory.mjs`. That constant is the source of truth, because it is
+what actually writes the file; this copy exists so the convention is readable without opening the
+script. A unit test asserts the two are identical, so an edit here that is not mirrored there fails
+the gate rather than drifting silently.
+
 ```markdown
 # Memory Index — Durable
 
-> **Two-index memory** (see `.claude/rules/agent-memory.md`). This file holds **durable** project
-> knowledge shared with the whole team via the repo. **Current-task / feature notes live in
-> [`MEMORY_CURRENT.md`](./MEMORY_CURRENT.md)** — high-staleness working memory, not durable principle.
-> Do not file durable knowledge there, and do not treat current-task notes as standing rules.
+> **Two-index memory** (see `.claude/rules/agent-memory.md`). This file holds **durable**
+> project knowledge shared with the whole team via the repo. **Current-task / feature /
+> temp-support notes live in [`MEMORY_CURRENT.md`](./MEMORY_CURRENT.md)** — high-staleness
+> working memory, not durable principle. Do not file durable knowledge there, and do not treat
+> current-task notes as standing rules.
 ```
 
 ## What syncs, what stays

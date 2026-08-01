@@ -14,8 +14,8 @@
 // authoritative (the GitHub issue/PR each note cites is the shared source of task state). The CI
 // reviewer reads only `.claude/memory/MEMORY.md`, never temp/. See .claude/rules/agent-memory.md.
 //
-// Still deferred (.local/plans/agent-memory-sync-design.md): import (committed -> local) and the
-// CI memory-hygiene reminder. (The auditor is the separate `audit-memory` skill.)
+// Still deferred: import (committed -> local) and the CI memory-hygiene reminder. (The auditor is
+// the separate `audit-memory` skill.)
 //
 // Safe by default: prints a plan and writes nothing unless --write is passed.
 // Non-destructive to the source dir in all modes.

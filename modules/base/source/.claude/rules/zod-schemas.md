@@ -2,6 +2,7 @@
 paths:
   - "src/**/*.ts"
   - "test/**/*.ts"
+  - "scripts/**/*.ts"
 trigger_phrase:
   haiku: "zod schema first source of truth"
   opus: "zod schema first boundary validation"
@@ -9,6 +10,11 @@ trigger_phrase:
 ---
 
 # Zod Schemas
+
+**Review-only.** No mechanical gate exists for anything in this file: no linter can tell that a
+hand-written interface describes data that arrived off the wire. `noExplicitAny` (error) pushes you
+toward `unknown` at boundaries, which is where a schema then becomes the obvious next step — but
+nothing checks that you took it. Green CI is not evidence this rule was followed.
 
 ## Rule: Schema-First for Boundary Data
 
@@ -97,6 +103,10 @@ z.string().min(1, { message: 'customerId is required' })
 `z.looseObject(...)` is the Zod 4 form of Zod 3's `.passthrough()` — use it for a schema that must
 accept unknown keys. `.passthrough()` does not exist in Zod 4.
 
+Prefer the **top-level** string-format validators — `z.uuid()`, `z.email()`, `z.url()` — over the
+method forms (`z.string().uuid()`). The method forms still work but are deprecated in Zod 4, and the
+top-level ones are less verbose and tree-shakable.
+
 ## Shared Field Extraction
 
 When the same field/sub-schema appears in 2+ schemas, extract it — but apply the rule-of-three from
@@ -104,6 +114,7 @@ When the same field/sub-schema appears in 2+ schemas, extract it — but apply t
 usually has to be un-extracted when the second use case turns out to need different validation.
 
 ```typescript
-// Worth extracting once several schemas need identical, non-trivial validation:
-const customerIdField = z.string().uuid()
+// Worth extracting once several schemas need identical, non-trivial validation.
+// Note the top-level `z.uuid()` — the `z.string().uuid()` method form is deprecated in Zod 4.
+const customerIdField = z.uuid()
 ```

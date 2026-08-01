@@ -18,9 +18,8 @@ Fix these when you encounter them, even if they are unrelated to your primary ta
 
 - **Test failures** — any test that was passing before your changes must still pass after. If you find a pre-existing failing test, fix it.
 - **Type errors** — `tsc --noEmit` must produce zero errors. Fix any you find.
-- **Lint/format violations** — Biome violations (`npm run lint`, `npm run format`) must be resolved.
+- **Lint/format violations** — Biome violations (the `lint` and `format` scripts) must be resolved.
 - **Dead code** — commented-out blocks, unused variables, unreachable branches. Delete them.
-- **JSDoc violations** — missing or wrong-format doc comments on exported symbols.
 - **Hardcoded magic numbers** — numeric literals that should be named constants.
 
 ## What Does NOT Count
@@ -60,6 +59,6 @@ The cost of one grep before writing is negligible. The cost of 20 inline copies 
 Broken window fixes come **after** the primary task is functionally complete, not before. Do not let cleanup block delivery. Order:
 
 1. Complete primary task
-2. Run `npm run check:all` and `npm run test`
+2. Run the `check:all` and `test` scripts (via this project's package manager — `CLAUDE.md` names it)
 3. Fix any broken windows surfaced by those checks
 4. Re-run checks to confirm clean state
