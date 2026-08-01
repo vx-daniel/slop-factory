@@ -93,7 +93,10 @@ function stripAnsiSequences(rawOutput: string): string {
 /**
  * Presents a plain stream pair as the TTY handles inquirer's types ask for.
  *
- * THE ONLY CASTS IN THIS FILE, kept together and explained rather than scattered at the call site.
+ * ONE OF THIS FILE'S TWO DECLARATION MISMATCHES; the other is `plop.inquirer`, justified at its use site
+ * below. Both are cases where a dependency's TYPES are narrower than its documented runtime contract, which
+ * is the only thing a cast is allowed to paper over here — never an error in this file's own logic.
+ *
  * inquirer declares `input`/`output` as `NodeJS.ReadStream`/`WriteStream` — TTY handles carrying
  * `setRawMode`, `cursorTo`, `isRaw` and two dozen more. Its runtime requirement is much smaller: it
  * defaults `skipTTYChecks` to true (`inquirer/lib/ui/baseUI.js:61`) and, for these prompt types, never
@@ -104,8 +107,6 @@ function stripAnsiSequences(rawOutput: string): string {
  * If a future inquirer starts calling one of those members, this cast is the thing that was wrong, and the
  * failure will name the missing method.
  *
- * `plop.inquirer` needs the same treatment for the same reason: node-plop exposes it at runtime as a
- * documented passthrough (`node-plop/src/node-plop.js:223`) but omits it from `NodePlopAPI`.
  */
 function asPromptStreams(
   input: PassThrough,
@@ -134,12 +135,17 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
 
   const plop = await nodePlop(resolvePlopfilePath())
   const originalPrompt = inquirer.prompt
-  // See the header: the module object is the only thing both the returned api and the runner share.
+  // The second declaration mismatch (see `asPromptStreams`): node-plop exposes `inquirer` at runtime as a
+  // documented passthrough (`node-plop/src/node-plop.js:223`) but omits it from `NodePlopAPI`. And per this
+  // file's header, the module object is the only thing the returned api and the runner both hold.
   const plopWithInquirer = plop as unknown as { readonly inquirer: { prompt: typeof inquirer.prompt } }
   plopWithInquirer.inquirer.prompt = inquirer.createPromptModule(asPromptStreams(scriptedInput, capturedOutput))
 
   try {
-    const answersPromise = plop.getGenerator('generate').runPrompts() as Promise<Record<string, unknown>>
+    // ANNOTATED, not cast. `runPrompts` is declared `Promise<any>`, so this narrows rather than
+    // suppresses — without it every answer downstream would be `any`. `cli.ts` does the same thing the
+    // same way, for the same reason.
+    const answersPromise: Promise<Record<string, unknown>> = plop.getGenerator('generate').runPrompts()
     // Attached before the first await so a rejection during the script cannot become an unhandled one.
     const settled = answersPromise.then(
       (answers) => ({ answers }),
