@@ -53,7 +53,7 @@ Because the claims above are checked rather than asserted:
   `modules/gate/source/biome.json` rather than restating it, so there is one copy of the rules — including
   the naming plugin. It runs its own pre-commit hook, and its own pull requests are reviewed and
   secret-scanned by the workflows it generates. A broken shipped workflow now fails here first.
-- **The committed examples cannot drift.** `examples:check` regenerates all four and compares content and
+- **The committed examples cannot drift.** `examples:check` regenerates every one and compares content and
   executable bits, excluding nothing.
 
 [docs/verification.md](docs/verification.md) explains what each suite can and cannot see — including that

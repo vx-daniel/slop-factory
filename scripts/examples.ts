@@ -55,7 +55,7 @@ interface ExampleProject {
 }
 
 /**
- * The committed combinations. Four of the sixteen, chosen for information density rather than coverage —
+ * The committed combinations. Four of them, chosen for information density rather than coverage —
  * `tests/generation.test.ts` is what enumerates every reachable combination and gates ten of them.
  *
  * Three vary by package manager and runner; the fourth varies by LAYOUT, which is the only axis that
@@ -100,7 +100,7 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
       'The workspace layout, which is the only example that differs STRUCTURALLY rather than in a few ' +
       'files — source moves under packages/<name>/ while config stays at the root. Named as node-npm ' +
       'plus a layout suffix, and paired with npm + Vitest deliberately: the manager and runner deltas are ' +
-      'already readable in the other three, so diffing this against node-npm isolates the layout alone.',
+      'already readable in the others, so diffing this against node-npm isolates the layout alone.',
   },
 ]
 

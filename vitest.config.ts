@@ -47,7 +47,7 @@ export default defineConfig({
           // smol-toml, which the factory does not install — so collecting them here fails on imports
           // that are correct where the files actually live.
           //
-          // DERIVED from the contract rather than listed, unlike the the JSON configs that cannot
+          // DERIVED from the contract rather than listed, unlike the JSON configs that cannot
           // import it. Adding a copy tree covers this file automatically.
           exclude: MODULE_COPY_TREE_DIRECTORY_NAMES.map(
             (copyTreeDirectoryName) => `modules/*/${copyTreeDirectoryName}/**`,

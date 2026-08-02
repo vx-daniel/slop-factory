@@ -9,12 +9,12 @@ const FACTORY_ROOT = path.resolve(MODULES_DIRECTORY, '..')
 /**
  * Configs that must exclude every copy tree, and cannot import the list that names them.
  *
- * All three are JSON or JSONC, so `MODULE_COPY_TREES` is unreachable from them and the globs are written
+ * All of them are JSON or JSONC, so `MODULE_COPY_TREES` is unreachable from them and the globs are written
  * by hand. That makes "added a copy tree, forgot a config" a silent failure with three different symptoms:
  * tsc reporting errors in files that are correct where they actually live, Biome doing the same, and the
  * build compiling payload `.ts` that must stay `.ts`. This list is what makes the hand-maintenance safe.
  *
- * `biome.jsonc` carries a fourth consequence the other two do not: a missing exclude there means Biome
+ * `biome.jsonc` carries a fourth consequence the others do not: a missing exclude there means Biome
  * discovers the payload `biome.json` as a competing root config and refuses to run at all.
  *
  * `vitest.config.ts` is deliberately absent — it is TypeScript and derives its globs from the contract.
@@ -24,7 +24,7 @@ const CONFIGS_EXCLUDING_COPY_TREES: ReadonlyArray<{
   /**
    * How this config spells an exclusion — the prefix its glob carries, if any.
    *
-   * The two tsconfigs LIST excluded globs in an `exclude` array, so each glob stands alone with no prefix.
+   * The tsconfigs LIST excluded globs in an `exclude` array, so each glob stands alone with no prefix.
    * Biome instead NEGATES inside `files.includes`, so the same intent carries a leading `!`.
    *
    * Carried per config rather than loosening the assertion to "the tree name appears somewhere". That
@@ -146,7 +146,7 @@ describe('module copy trees', () => {
   })
 
   it('are excluded by every config that cannot import the copy-tree list', async () => {
-    // The the JSON configs write their globs by hand because JSON cannot import
+    // The JSON configs write their globs by hand because JSON cannot import
     // `MODULE_COPY_TREES`. Without this, adding a copy tree passes every other check and then breaks
     // tsc, Biome, or the build with a symptom that points at the payload file rather than the config.
     //

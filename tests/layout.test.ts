@@ -440,7 +440,7 @@ describe('monorepo layout with a named package', () => {
 })
 
 describe('the claude-workflows feature', () => {
-  /** The three the feature adds. `secret-scan.yml` is NOT here — it ships from base, unconditionally. */
+  /** The workflows the feature adds. `secret-scan.yml` is NOT here — it ships from base, unconditionally. */
   const FEATURE_WORKFLOWS = ['claude-pr-review.yml', 'claude-issue-agent.yml', 'test-audit.yml']
 
   let enabledDirectory: string
@@ -485,7 +485,7 @@ describe('the claude-workflows feature', () => {
 
   it('ships secret-scan either way, because it needs no token', async () => {
     // The distinction the whole feature split rests on. gitleaks needs no secret, so it belongs in base and
-    // works the moment a project is generated; the three above are inert without a token and so are opt-in.
+    // works the moment a project is generated; the ones above are inert without a token and so are opt-in.
     for (const projectDirectory of [enabledDirectory, disabledDirectory]) {
       await expect(
         access(path.join(projectDirectory, '.github', 'workflows', 'secret-scan.yml')),

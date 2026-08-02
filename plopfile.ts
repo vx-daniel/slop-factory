@@ -472,7 +472,7 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
         choices: [
           { name: 'Layered TOML config (Zod-validated)', value: 'config', checked: true },
           {
-            // Unchecked by default: all three need a CLAUDE_CODE_OAUTH_TOKEN repository secret, and
+            // Unchecked by default: each needs a CLAUDE_CODE_OAUTH_TOKEN repository secret, and
             // shipping ~700 lines of workflow that is inert without one is worse than not shipping it.
             name: 'Claude workflows — PR review, issue triage, test audit (needs CLAUDE_CODE_OAUTH_TOKEN)',
             value: CLAUDE_WORKFLOWS_FEATURE,
