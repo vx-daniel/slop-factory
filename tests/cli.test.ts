@@ -24,8 +24,16 @@ import { type CommandResult, runCommand } from './generate-project.js'
  * missing-build branch, the exit code as the shell sees it, and which stream each message went to. Changing
  * a shipped code path to observe it, when spawning observes more of it, is a trade with no upside.
  *
- * The one exception is `isPromptInterruption`, which is a pure predicate over three error shapes it cannot
- * produce itself. Reaching those through a real Ctrl-C needs a pseudo-terminal, which is #44.
+ * TWO THINGS ARE REACHED DIRECTLY RATHER THAN THROUGH THE BINARY, for different reasons.
+ *
+ * `listenForInterruption` is given a REAL SIGINT, raised in this process. No pseudo-terminal is involved,
+ * and an earlier version of this comment claiming one was required was wrong: Vitest's default pool is
+ * `forks`, so the worker is a child with no SIGINT listener of its own, and inquirer signals `process.pid`
+ * rather than the process group. This is the only automated coverage the interruption fix has (#50).
+ *
+ * `isPromptInterruption` is a pure predicate, tested against hand-built error shapes. That is deliberately
+ * NOT a reachability claim — two of the three shapes cannot occur with the installed inquirer at all, which
+ * `cli.ts` sets out in full. Ctrl-C never reaches this predicate; it raises a signal.
  */
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
