@@ -160,3 +160,10 @@ than its CLI — [docs/publishing.md](docs/publishing.md) explains why that dist
 
 Node **24+** for the CLI. Bun **1.3+** is needed only to verify the Bun combinations; the generation suite
 skips them if Bun is absent.
+
+**Verified on Linux only.** Every workflow here and in every generated project is `ubuntu-latest`, with no
+matrix, so that is the one platform anything has actually been run on. macOS is expected to work and nothing
+platform-specific was found when this was looked into — but expected is not verified. On Windows a generated
+project should be fine, while the factory's **own** test suite has known gaps: it spawns package managers in
+a form Node refuses on Windows, and compares an executable bit that Windows does not have.
+[#51](https://github.com/vx-daniel/slop-factory/issues/51) carries the detail and the options.
