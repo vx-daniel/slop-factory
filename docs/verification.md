@@ -22,6 +22,16 @@ in this repository's history, and it is the one a human would otherwise push.
 only fire on generator or CLI changes and each rebuilds, and the last takes minutes. All four run in CI —
 `modules/vitest-projects-in-ci.test.ts` fails if a Vitest project is ever left out of the workflow.
 
+The suites are independent: any combination of them can run in one `vitest` invocation. That was not always
+true — `packaging` used to build inside a hook, and the build deletes `dist/` while the five suites that read
+it are running, so combining projects failed nondeterministically and blamed whichever one happened to be
+reading ([#23](https://github.com/vx-daniel/slop-factory/issues/23)). The build now lives in the npm scripts,
+where every other `test:*` script already had it, and `modules/dist-is-not-a-test-fixture.test.ts` fails if a
+suite starts building again.
+
+**`dist/` must be built before any suite that reads it.** Every `test:*` script does that for you; a bare
+`npx vitest run` does not, and `packaging` says so by name rather than failing as a missing tarball entry.
+
 The linter is the Biome config the factory ships, reached by `extends` — see
 [`module-contract.md`](module-contract.md). A green `npm run lint` here therefore means what it means in a
 generated project: same rules, same naming plugin, same pinned version, with

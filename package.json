@@ -46,7 +46,7 @@
     "test": "vitest run --project unit",
     "test:cli": "npm run build && vitest run --project cli",
     "test:layout": "npm run build && vitest run --project layout",
-    "test:packaging": "vitest run --project packaging",
+    "test:packaging": "npm run build && vitest run --project packaging",
     "test:prompts": "npm run build && vitest run --project prompts",
     "typecheck": "tsc --noEmit",
     "verify": "npm run build && vitest run --project generation"

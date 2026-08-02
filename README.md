@@ -94,7 +94,7 @@ The README is the front door; the reasoning lives in [`docs/`](docs/), one docum
 |---|---|
 | [module-contract.md](docs/module-contract.md) | The five channels, why copy trees are never rendered, and how to add a module |
 | [modules.md](docs/modules.md) | What each of the eleven modules owns, which sets are exclusive, and the `bun test` trade |
-| [verification.md](docs/verification.md) | The six suites, why the derived matrix is sampled, and how to read a green run |
+| [verification.md](docs/verification.md) | The seven suites, why the derived matrix is sampled, and how to read a green run |
 | [publishing.md](docs/publishing.md) | The three-step build, and what guards the published tarball |
 
 Generated projects get their own `docs/` folder — one document per module they were built from. See
