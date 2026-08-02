@@ -60,8 +60,13 @@ export default defineConfig({
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
           // One subject, two angles: `prompts.test.ts` reads the prompt list as data, and
-          // `prompt-session.test.ts` answers it with scripted keystrokes. Neither touches `cli.ts` — the
-          // session harness drives the plopfile directly — so they belong here rather than in `cli`.
+          // `prompt-session.test.ts` answers it with scripted keystrokes. Both stop at the ANSWERS,
+          // driving the plopfile directly, which is why they belong here rather than in `cli`.
+          //
+          // They no longer avoid LOADING `cli.ts` — the shared harness imports `runCommandLine` for the
+          // other driver, so it comes in transitively. That is an import, not a code path: nothing in
+          // this project calls it. The distinction is worth keeping straight, because "does not touch
+          // `cli.ts`" is what this comment used to claim, and it stopped being true in #52.
           include: ['tests/prompts.test.ts', 'tests/prompt-session.test.ts'],
           // Above the harness's own 5s wait for a prompt to render, so a mis-scripted flow reports the
           // transcript it captured rather than Vitest's generic "test timed out", which says nothing about
@@ -71,12 +76,24 @@ export default defineConfig({
       },
       {
         test: {
-          // Spawns the published binary and asserts what it prints, to which stream, and its exit code.
-          // Needs the BUILT cli, like `prompts` needs the built plopfile — `bin/slop-factory.mjs` loads
-          // `dist/cli.js` and refuses if it is absent. A subprocess per case, so seconds rather than
-          // milliseconds, which is why it is not folded into `unit`.
+          // Everything that goes through `cli.ts`, from two angles that reach different halves of it.
+          //
+          // `cli.test.ts` SPAWNS the published binary — the shebang, the bin's missing-build branch, which
+          // stream each message went to, and the exit code as a shell sees it. It cannot reach the
+          // interactive path: a child's stdin is a pipe, and `runGenerate` refuses a non-TTY stdin.
+          //
+          // `cli-session.test.ts` runs it IN-PROCESS with stdin presented as a terminal, which is the only
+          // way to reach what follows the prompts — the change log, "Done.", the failure exit, Ctrl-C.
+          // That half was executed by nothing at all until #52.
+          //
+          // Needs the BUILT plopfile as well as the built cli: the binary loads `dist/cli.js`, and
+          // `cli.ts` itself resolves the compiled plopfile. `test:cli` builds first, so both are present.
           name: 'cli',
-          include: ['tests/cli.test.ts'],
+          include: ['tests/cli.test.ts', 'tests/cli-session.test.ts'],
+          // The in-process file renders real prompts, so it inherits the harness's per-prompt wait. Same
+          // reasoning as `prompts`: above that wait, so a mis-scripted flow reports the transcript it
+          // captured rather than Vitest's generic timeout, which says nothing about which question stalled.
+          testTimeout: INTERACTIVE_TIMEOUT_MS,
         },
       },
       {

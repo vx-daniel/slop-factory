@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream'
 import inquirer from 'inquirer'
 import nodePlop from 'node-plop'
+import { runCommandLine } from '../cli.js'
 import { resolvePlopfilePath } from '../plopfile-path.js'
 
 /**
@@ -11,9 +12,22 @@ import { resolvePlopfilePath } from '../plopfile-path.js'
  * Neither renders a question. So nothing covered the parts an operator actually experiences: a question
  * being skipped, an answer being rejected and re-asked, or Ctrl-C. See #44.
  *
+ * TWO ENTRY POINTS, over one shared core.
+ *
+ *   - `drivePrompts` answers the prompt list DIRECTLY, through node-plop. It stops at the answers, so it
+ *     can say what a question produced but nothing about what the CLI then does with it.
+ *   - `driveCommandLine` answers the same list THROUGH `cli.ts`, so the half of `runGenerate` that follows
+ *     the answers — the change log, "Done.", the failure exit, the cancellation report — is reached at all.
+ *     Nothing executed that half before; see #52.
+ *
+ * The extra patches the second one needs are applied AROUND the core rather than switched inside it, so
+ * the shared path has no branch and the direct driver cannot accidentally acquire them.
+ *
  * NO PSEUDO-TERMINAL, AND NO NEW DEPENDENCY. inquirer 9 defaults `skipTTYChecks` to true
  * (`inquirer/lib/ui/baseUI.js`), so a plain `PassThrough` pair is enough — no `isTTY`, no `setRawMode`,
- * both measured as unnecessary.
+ * both measured as unnecessary. `driveCommandLine` sets `process.stdin.isTTY` anyway, but for a different
+ * reason: `cli.ts` REFUSES a non-TTY stdin before it reaches any prompt. That guard, not inquirer, is why
+ * no suite could reach `runGenerate`'s second half.
  *
  * THE ONE NON-OBVIOUS PART, which cost four failed attempts to find. node-plop returns
  * `Object.assign({}, plopfileApi, {…})` — a COPY (`node-plop`'s `nodePlopApi` assembly) — while the generator
@@ -23,6 +37,10 @@ import { resolvePlopfilePath } from '../plopfile-path.js'
  * `prompt` on the inquirer module itself, which both objects hold by reference. That is a module-global
  * mutation, so it is restored in a `finally` — a leaked patch would silently redirect every later suite in
  * the same worker.
+ *
+ * PATCHING THE MODULE IS ALSO WHAT MAKES THE SECOND DRIVER POSSIBLE. `cli.ts` builds its own plop instance
+ * that this file never sees, so there is no `plop.inquirer` here to reach for — the module object is the
+ * only thing both sides hold. `drivePrompts` asserts that identity rather than assuming it.
  */
 
 /** One scripted exchange: wait for a question to appear, then send an answer. */
@@ -42,8 +60,26 @@ export interface DriveResult {
   readonly screenText: string
 }
 
+export interface CommandLineResult {
+  /** What `runCommandLine` returned — the code the binary would exit with. */
+  readonly exitCode?: number
+  /** The error the run rejected with, if it did. */
+  readonly error?: unknown
+  /**
+   * What `cli.ts` itself wrote, across BOTH standard streams.
+   *
+   * Separate from `screenText` because they come from different places and mean different things: the
+   * prompts render into an injected stream, while `cli.ts` writes to `process.stdout`/`process.stderr`
+   * directly. Asserting the CLI's own report against the prompt transcript would match a question's text
+   * as readily as an answer's consequence.
+   */
+  readonly printedText: string
+  /** Everything the PROMPTS drew, with ANSI control sequences removed. */
+  readonly screenText: string
+}
+
 /**
- * Enter, and the two control bytes the tests need.
+ * The keystrokes a script can send.
  *
  * Written as unicode escapes rather than pasted literals: a raw ESC or ETX in a source file is invisible
  * in most editors and in a diff, which is how one gets deleted by accident.
@@ -58,6 +94,31 @@ export const DOWN_ARROW = '\u001B[B'
  * produces `../escapecore`. An operator would backspace, so a faithful script has to as well.
  */
 export const BACKSPACE = '\u007F'
+/**
+ * Ctrl-C, as the byte a terminal actually sends.
+ *
+ * ONLY SAFE THROUGH `driveCommandLine`, and that distinction is why it lives beside the harness rather
+ * than in a test file. inquirer's force-close ends with `process.kill(process.pid, 'SIGINT')`. Sent through
+ * `drivePrompts` nothing is listening, so Node's default action kills the Vitest worker and takes the rest
+ * of the file down with it — measured, see `prompt-session.test.ts`. Sent through `driveCommandLine`,
+ * `cli.ts` has already installed `listenForInterruption` by the time a prompt is live, and that handler is
+ * the only SIGINT listener in the worker (measured: `process.listenerCount('SIGINT')` is 0 beforehand).
+ */
+export const CTRL_C = '\u0003'
+
+/**
+ * Distinctive fragments of each prompt's own message, used to wait for one and to assert it appeared.
+ *
+ * SHARED, because both drivers script the same generator. They lived in `prompt-session.test.ts` while it
+ * was the only caller; `cli-session.test.ts` answering the same questions is what made a second copy the
+ * alternative, and two copies of a prompt's wording drift the first time a message is reworded.
+ */
+export const PROJECT_NAME_QUESTION = 'Name of the project'
+export const DESTINATION_QUESTION = 'Directory to create it in'
+export const LAYOUT_QUESTION = 'Which layout?'
+export const PACKAGE_NAMES_QUESTION = 'Names of the packages'
+export const PACKAGE_MANAGER_QUESTION = 'Which package manager?'
+export const FEATURES_QUESTION = 'Which optional features'
 
 /** How long to wait for a prompt to render before giving up, in milliseconds. */
 const PROMPT_APPEARANCE_TIMEOUT_MS = 5000
@@ -82,9 +143,10 @@ function stripAnsiSequences(rawOutput: string): string {
 /**
  * Presents a plain stream pair as the TTY handles inquirer's types ask for.
  *
- * ONE OF THIS FILE'S TWO DECLARATION MISMATCHES; the other is `plop.inquirer`, justified at its use site
- * below. Both are cases where a dependency's TYPES are narrower than its documented runtime contract, which
- * is the only thing a cast is allowed to paper over here — never an error in this file's own logic.
+ * ONE OF THIS FILE'S DECLARATION MISMATCHES; the others are `plop.inquirer` and the stream writers in
+ * `captureProcessOutput`, each justified at its own use site. Every one is a case where a dependency's or
+ * Node's TYPES are narrower than the documented runtime contract, which is the only thing a cast is allowed
+ * to paper over here — never an error in this file's own logic.
  *
  * inquirer declares `input`/`output` as `NodeJS.ReadStream`/`WriteStream` — TTY handles carrying
  * `setRawMode`, `cursorTo`, `isRaw` and two dozen more. Its runtime requirement is much smaller: it
@@ -108,13 +170,94 @@ function asPromptStreams(
 }
 
 /**
- * Runs the generator's prompts against scripted input and returns the answers plus what was displayed.
+ * The generator to drive, and the CLI subcommand that runs it.
+ *
+ * One constant for both because they are deliberately the same word — `cli.ts` says so at its own
+ * `GENERATE_COMMAND`, which is not exported.
+ */
+const GENERATOR_NAME = 'generate'
+
+/**
+ * Makes `process.stdin` look like a terminal, and yields the undo.
+ *
+ * `runGenerate` refuses a non-TTY stdin, so without this every `driveCommandLine` session would stop
+ * seventeen lines in. Restoring the ORIGINAL DESCRIPTOR rather than assigning a value back matters:
+ * `isTTY` is absent on a piped stdin, and leaving `false` where there was nothing is still a change —
+ * every later suite in this worker reads the same `process.stdin`.
+ */
+function presentStdinAsTerminal(): () => void {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+  Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true })
+
+  return (): void => {
+    if (originalDescriptor === undefined) {
+      Reflect.deleteProperty(process.stdin, 'isTTY')
+      return
+    }
+    Object.defineProperty(process.stdin, 'isTTY', originalDescriptor)
+  }
+}
+
+/**
+ * Diverts everything written to the process's own output streams into a string.
+ *
+ * BOTH STREAMS INTO ONE BUFFER, on purpose. `cli.ts` splits its reporting across them — the change log and
+ * "Done." to stdout, failures and the cancellation notice to stderr — and a test asking "was the operator
+ * told X" does not care which. Which stream carried a message is already covered, by the subprocess cases
+ * in `cli.test.ts` that can see them separately.
+ */
+function captureProcessOutput(): { text: () => string; restore: () => void } {
+  // Held UNBOUND, and that is not an oversight. Restoring `original.bind(stream)` puts back a different
+  // function object than the one taken, so a second session would capture the wrapper the first restored
+  // and stack another layer every time. Caught by the restore assertion in `cli-session.test.ts`, which
+  // compares identity. Nothing here ever calls the original, so there is nothing for a bind to fix.
+  const originalStdoutWrite = process.stdout.write
+  const originalStderrWrite = process.stderr.write
+  let captured = ''
+
+  // The declared signature carries overloads for encodings and callbacks that `cli.ts` never uses; it
+  // passes a plain string. Accepting the chunk and reporting success is the whole contract needed here.
+  const captureChunk = (chunk: string | Uint8Array): boolean => {
+    captured += String(chunk)
+    return true
+  }
+  process.stdout.write = captureChunk as typeof process.stdout.write
+  process.stderr.write = captureChunk as typeof process.stderr.write
+
+  return {
+    text: (): string => captured,
+    restore: (): void => {
+      process.stdout.write = originalStdoutWrite
+      process.stderr.write = originalStderrWrite
+    },
+  }
+}
+
+/** What a scripted session produced: whichever of these two settled, plus the prompt transcript. */
+interface ScriptedSessionOutcome<TResult> {
+  readonly result?: TResult
+  readonly error?: unknown
+  readonly screenText: string
+}
+
+/**
+ * Plays a script against whatever `beginSession` starts, with the prompts wired to injected streams.
+ *
+ * THE SHARED CORE of both drivers. It owns the one patch they both need — `inquirer.prompt` — and the
+ * wait-then-send loop. Callers that need more patching apply it around this call, so this path stays
+ * branch-free.
+ *
+ * `beginSession` is invoked AFTER the patch is installed and is not awaited here: the returned promise is
+ * raced against the script, because the session only progresses as answers arrive.
  *
  * Each response WAITS for its question to render rather than sleeping a fixed interval. A fixed delay is
  * the classic source of flake here — it is either too short on a loaded machine or wasted time on an idle
  * one, and when it is too short the failure looks like a broken prompt rather than a broken test.
  */
-export async function drivePrompts(script: readonly ScriptedResponse[]): Promise<DriveResult> {
+async function runScriptedSession<TResult>(
+  script: readonly ScriptedResponse[],
+  beginSession: () => Promise<TResult>,
+): Promise<ScriptedSessionOutcome<TResult>> {
   const scriptedInput = new PassThrough()
   const capturedOutput = new PassThrough()
   let rawOutput = ''
@@ -122,27 +265,19 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
     rawOutput += String(chunk)
   })
 
-  const plop = await nodePlop(resolvePlopfilePath())
-  // The second declaration mismatch (see `asPromptStreams`): node-plop exposes `inquirer` at runtime as a
-  // documented passthrough (`node-plop`'s `plopfileApi` literal) but omits it from `NodePlopAPI`. And per this
-  // file's header, the module object is the only thing the returned api and the runner both hold.
-  const plopWithInquirer = plop as unknown as { readonly inquirer: { prompt: typeof inquirer.prompt } }
-  // Captured and restored through the SAME expression that is mutated. `plop.inquirer === inquirer` today,
-  // so reading one and writing the other happens to work — pinned by nothing, and a silent redirect of every
-  // later suite in this worker if it ever stops being true.
-  const originalPrompt = plopWithInquirer.inquirer.prompt
-  plopWithInquirer.inquirer.prompt = inquirer.createPromptModule(asPromptStreams(scriptedInput, capturedOutput))
+  // Patched on the MODULE, which is what reaches the generator runner and what `cli.ts`'s own plop instance
+  // holds too — see this file's header. Restored in the `finally`, because a leaked patch would silently
+  // redirect every later suite in this worker.
+  const originalPrompt = inquirer.prompt
+  inquirer.prompt = inquirer.createPromptModule(asPromptStreams(scriptedInput, capturedOutput))
 
   try {
-    // ANNOTATED, not cast. `runPrompts` is declared `Promise<any>`, so this narrows rather than
-    // suppresses — without it every answer downstream would be `any`. `cli.ts` does the same thing the
-    // same way, for the same reason.
-    const answersPromise: Promise<Record<string, unknown>> = plop.getGenerator('generate').runPrompts()
+    const sessionPromise = beginSession()
     // Attached before the first await so a rejection during the script cannot become an unhandled one.
     // Typed as the union rather than inferred per-branch, so `waitForText` can read `error` off it without
     // narrowing — the whole point of passing it there is to report a failure instead of timing out on one.
-    const settled: Promise<{ answers?: Record<string, unknown>; error?: unknown }> = answersPromise.then(
-      (answers) => ({ answers }),
+    const settled: Promise<{ result?: TResult; error?: unknown }> = sessionPromise.then(
+      (result) => ({ result }),
       (error: unknown) => ({ error }),
     )
 
@@ -154,7 +289,59 @@ export async function drivePrompts(script: readonly ScriptedResponse[]): Promise
     const outcome = await settled
     return { ...outcome, screenText: stripAnsiSequences(rawOutput) }
   } finally {
-    plopWithInquirer.inquirer.prompt = originalPrompt
+    inquirer.prompt = originalPrompt
+  }
+}
+
+/**
+ * Runs the generator's prompts against scripted input and returns the answers plus what was displayed.
+ *
+ * Stops at the answers. What the CLI does with them afterwards is `driveCommandLine`'s subject.
+ */
+export async function drivePrompts(script: readonly ScriptedResponse[]): Promise<DriveResult> {
+  const plop = await nodePlop(resolvePlopfilePath())
+  // The second declaration mismatch (see `asPromptStreams`): node-plop exposes `inquirer` at runtime as a
+  // documented passthrough (`node-plop`'s `plopfileApi` literal) but omits it from `NodePlopAPI`.
+  const plopWithInquirer = plop as unknown as { readonly inquirer: unknown }
+  // ASSERTED, not assumed. The core patches the inquirer MODULE; this generator's runner reads whatever
+  // `plop.inquirer` is. They are the same object today, and if that ever stops being true the prompts
+  // would render to the real stdout while this harness waited for text that never arrives — a five-second
+  // timeout with a misleading message. Failing here instead names the actual cause.
+  if (plopWithInquirer.inquirer !== inquirer) {
+    throw new Error('node-plop no longer shares the inquirer module, so patching it cannot reach the prompts')
+  }
+
+  const { result, error, screenText } = await runScriptedSession(
+    script,
+    // ANNOTATED, not cast. `runPrompts` is declared `Promise<any>`, so this narrows rather than
+    // suppresses — without it every answer downstream would be `any`. `cli.ts` does the same thing the
+    // same way, for the same reason.
+    (): Promise<Record<string, unknown>> => plop.getGenerator(GENERATOR_NAME).runPrompts(),
+  )
+  return { answers: result, error, screenText }
+}
+
+/**
+ * Runs the whole CLI against scripted input — prompts answered, then everything `runGenerate` does next.
+ *
+ * THE PATCHES THIS ADDS, both module-global and both restored in the `finally`:
+ *
+ *   - `process.stdin.isTTY`, because `runGenerate` refuses a non-TTY stdin before reaching a prompt. This
+ *     is the guard that made the second half of that function unreachable from any suite.
+ *   - `process.stdout.write` / `process.stderr.write`, because `cli.ts` writes its change log, its "Done.",
+ *     its failure lines and its cancellation report straight to the process streams rather than to
+ *     anything injectable. Capturing at that seam was chosen over adding stream parameters to
+ *     `runCommandLine`: #42 rejected changing a shipped code path to observe it, and that reasoning holds.
+ */
+export async function driveCommandLine(script: readonly ScriptedResponse[]): Promise<CommandLineResult> {
+  const restoreStdin = presentStdinAsTerminal()
+  const processOutput = captureProcessOutput()
+  try {
+    const { result, error, screenText } = await runScriptedSession(script, () => runCommandLine([GENERATOR_NAME]))
+    return { exitCode: result, error, printedText: processOutput.text(), screenText }
+  } finally {
+    processOutput.restore()
+    restoreStdin()
   }
 }
 
