@@ -1,6 +1,6 @@
 # The modules
 
-Eleven modules on four axes: two always-on, one of three package managers (plus the runtime it implies), one
+The modules, by axis: the always-on ones, then a package manager (plus the runtime it implies), one
 of two test runners, one of two layouts, plus opt-in features.
 
 See [`module-contract.md`](module-contract.md) for how a module contributes, and how to add one.
@@ -87,5 +87,5 @@ silently skipped — taking the floor guard with it.
 
 ## Related
 
-- [`module-contract.md`](module-contract.md) — the five channels, and how to add a module
+- [`module-contract.md`](module-contract.md) — the channels a module contributes through, and how to add one
 - [`verification.md`](verification.md) — what proves a module change is correct

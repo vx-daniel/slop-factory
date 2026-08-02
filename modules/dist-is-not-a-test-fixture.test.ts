@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 /**
  * Guards that no test suite builds, because `dist/` is shared mutable state between Vitest projects.
  *
- * WHY THIS EXISTS. Five of the six projects in `vitest.config.ts` read `dist/plopfile.js` or `dist/cli.js`,
+ * WHY THIS EXISTS. Nearly every project in `vitest.config.ts` reads `dist/plopfile.js` or `dist/cli.js`,
  * and Vitest runs projects CONCURRENTLY. `npm run build` begins by DELETING `dist/`. So a suite that built
  * in a hook was wiping the artifact its siblings were mid-way through reading — nondeterministically, and
  * reported against the READER every time. `packaging` did exactly that, and the error it produced named

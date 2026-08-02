@@ -3,7 +3,7 @@
 How a module contributes to a generated project, and how to write one. The contract itself is
 `modules/module-contract.ts`; this explains the reasoning the type signatures cannot carry.
 
-## The five channels
+## The channels
 
 Three place files, two merge data. The copy/render split is load-bearing, not stylistic.
 

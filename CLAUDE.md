@@ -40,7 +40,7 @@ rather than an adopter's.
 npm run check:all       # THE gate: biome → tsc --noEmit → unit tests, cheap-first
 npm run test:layout     # where files land, both layouts — seconds, installs nothing
 npm run examples:check  # zero drift = generated output is byte-for-byte unchanged
-npm run verify          # slow (~35s): generates + installs + gates 10 of 16 combinations
+npm run verify          # slow (~35s): generates, installs and gates the sampled combinations
 ```
 
 `check:all` is necessary but **not sufficient**. It proves the factory compiles and its own tests pass — it

@@ -97,5 +97,5 @@ check that passes because it found nothing to look at is not a check.
 
 ## Related
 
-- [`verification.md`](verification.md) — the six suites and what each proves
+- [`verification.md`](verification.md) — every suite and what each proves
 - [`module-contract.md`](module-contract.md) — what a copy tree is, and why it is never rendered

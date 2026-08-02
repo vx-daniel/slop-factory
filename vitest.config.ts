@@ -14,7 +14,7 @@ const INTERACTIVE_TIMEOUT_MS = 30_000
 
 export default defineConfig({
   test: {
-    // Six projects, split by COST, because that split decides what gets run habitually. Listed roughly
+    // The projects, split by COST, because that split decides what gets run habitually. Listed roughly
     // cheapest-first, and each one's own comment below gives the reason it is separate rather than folded
     // into the project before it.
     //

@@ -1,6 +1,6 @@
 # Verification
 
-Seven suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
+The suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
 nobody runs either.
 
 | Suite | Command | Cost | What it proves |
@@ -23,8 +23,8 @@ only fire on generator or CLI changes and each rebuilds, and the last takes minu
 `modules/vitest-projects-in-ci.test.ts` fails if a Vitest project is ever left out of the workflow.
 
 The suites are independent: any combination of them can run in one `vitest` invocation. That was not always
-true — `packaging` used to build inside a hook, and the build deletes `dist/` while the five suites that read
-it are running, so combining projects failed nondeterministically and blamed whichever one happened to be
+true — `packaging` used to build inside a hook, and the build deletes `dist/` out from under every suite
+that reads it, so combining projects failed nondeterministically and blamed whichever one happened to be
 reading ([#23](https://github.com/vx-daniel/slop-factory/issues/23)). The build now lives in the npm scripts,
 where every other `test:*` script already had it, and `modules/dist-is-not-a-test-fixture.test.ts` fails if a
 suite starts building again.
@@ -82,8 +82,8 @@ combination the prompts gain is never gated, and one they lose is gated forever 
 cannot produce it. Deriving it means adding a manager or runner extends the matrix without anyone
 remembering to.
 
-**Sixteen combinations are enumerated; ten install and gate.** Sampling is separate from reachability and
-stated as a predicate rather than by omission:
+**Every reachable combination is enumerated; a subset installs and gates.** Sampling is separate from
+reachability and stated as a predicate rather than by omission:
 
 - **Single-package gets no discount** — it is the default and the cheapest to get wrong. A test asserts no
   `single` row is ever sampled out.

@@ -22,14 +22,14 @@ Every row is a file you can read in [`examples/`](examples/) before deciding.
 | **A coverage floor that fails** | 85%, enforced in CI. Under Vitest that is four metrics — lines, branches, functions **and** statements — over an explicit `src/**/*.ts` include, so an untested file counts against you rather than vanishing from the table. Under `bun test` it is functions and lines only, with no include; [#5](https://github.com/vx-daniel/slop-factory/issues/5) carries the measurement. `COVERAGE.md` is regenerated from the report. |
 | **A pre-commit hook** | Wired by `prepare` through `core.hooksPath`. No husky, no extra dependency, nothing to remember. |
 | **CI that works on the first push** | `ci.yml` runs the gate. `coverage-main.yml` keeps `COVERAGE.md` current. `secret-scan.yml` fails a pull request that commits a secret — gitleaks, scoped to the PR's new commits, with no token to provision. |
-| **Rules an agent can use** | `CLAUDE.md`, seven rules under `.claude/rules/`, three skills. Each rule states *the failure mode it blocks*, so a session with no memory of the decision can tell when it has stopped applying. |
+| **Rules an agent can use** | `CLAUDE.md`, the rules under `.claude/rules/`, and agent skills. Each rule states *the failure mode it blocks*, so a session with no memory of the decision can tell when it has stopped applying. |
 | **Docs that carry the reasoning** | One document under `docs/` per module the project was built from — why each choice was made, not what the flags do. The count follows your answers; [`node-npm`](examples/node-npm/docs) gets seven. |
 | **Layered configuration** *(opt-in)* | TOML defaults, local overrides, `.env`, validated by a Zod schema before anything reads a value. |
 | **Claude workflows** *(opt-in)* | PR review, issue triage, test audit. Self-contained files, no organisation setup; inert until `CLAUDE_CODE_OAUTH_TOKEN` is set. |
 
 ## The choices it asks about
 
-Four axes, assembled from eleven composable modules:
+The axes, assembled from composable modules:
 
 | Axis | Options |
 |---|---|
@@ -92,9 +92,9 @@ The README is the front door; the reasoning lives in [`docs/`](docs/), one docum
 
 | Document | What it covers |
 |---|---|
-| [module-contract.md](docs/module-contract.md) | The five channels, why copy trees are never rendered, and how to add a module |
-| [modules.md](docs/modules.md) | What each of the eleven modules owns, which sets are exclusive, and the `bun test` trade |
-| [verification.md](docs/verification.md) | The seven suites, why the derived matrix is sampled, and how to read a green run |
+| [module-contract.md](docs/module-contract.md) | The channels a module contributes through, why copy trees are never rendered, and how to add one |
+| [modules.md](docs/modules.md) | What each module owns, which sets are exclusive, and the `bun test` trade |
+| [verification.md](docs/verification.md) | Every suite, why the derived matrix is sampled, and how to read a green run |
 | [publishing.md](docs/publishing.md) | The three-step build, and what guards the published tarball |
 
 Generated projects get their own `docs/` folder — one document per module they were built from. See
@@ -136,7 +136,7 @@ npm run test:layout       # generates into a temp dir and checks WHERE files lan
 npm run test:packaging    # builds + inspects the tarball npm publish would upload
 npm run examples:check    # fails if examples/ no longer matches the generator
 npm run examples:refresh  # rewrite examples/ from the current modules
-npm run verify            # slow: generates + installs + gates 10 of the 16 combinations, printing the rest
+npm run verify            # slow: generates, installs and gates the sampled combinations, printing the rest
 KEEP_GENERATED_TREES=1 npm run verify   # same, but leaves the trees on disk to inspect
 ```
 
