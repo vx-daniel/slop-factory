@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
  * `layout`. Two analysis cycles were lost to that misdirection before anyone read the config closely
  * enough (#23).
  *
- * The fix moved the build into `test:packaging`, where the four sibling scripts already had it. This guard
+ * The fix moved the build into `test:packaging`, where the sibling scripts already had it. This guard
  * is what keeps it there: the arrangement was previously safe "by convention only", which is precisely the
  * kind of invariant that decays the moment someone adds a suite needing a fresh build.
  *

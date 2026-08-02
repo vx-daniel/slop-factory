@@ -4,7 +4,7 @@ import type { PackageJsonFragment, ProjectAnswers, ProjectModule } from '../modu
 export const CLAUDE_WORKFLOWS_FEATURE = 'claude-workflows'
 
 /**
- * Three GitHub Actions workflows that run Claude against a repository — selected by the
+ * The GitHub Actions workflows that run Claude against a repository — selected by the
  * `claude-workflows` feature checkbox.
  *
  * WHY THIS IS OPT-IN RATHER THAN PART OF `base`. All three require a `CLAUDE_CODE_OAUTH_TOKEN` repository
@@ -32,7 +32,7 @@ export const claudeWorkflowsModule: ProjectModule = {
   documentation: {
     path: 'docs/claude-workflows.md',
     title: 'Claude workflows',
-    summary: 'The three agent workflows, the one secret they need, and what each does when that secret is absent.',
+    summary: 'The agent workflows, the one secret they need, and what each does when that secret is absent.',
   },
 
   isSelected(answers: ProjectAnswers): boolean {

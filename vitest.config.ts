@@ -47,7 +47,7 @@ export default defineConfig({
           // smol-toml, which the factory does not install — so collecting them here fails on imports
           // that are correct where the files actually live.
           //
-          // DERIVED from the contract rather than listed, unlike the three JSON configs that cannot
+          // DERIVED from the contract rather than listed, unlike the the JSON configs that cannot
           // import it. Adding a copy tree covers this file automatically.
           exclude: MODULE_COPY_TREE_DIRECTORY_NAMES.map(
             (copyTreeDirectoryName) => `modules/*/${copyTreeDirectoryName}/**`,
@@ -59,7 +59,7 @@ export default defineConfig({
           // Reads the generator's prompt list without answering it. Cheap, but it needs the BUILT
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
-          // Two files, one subject: `prompts.test.ts` reads the prompt list as data, and
+          // One subject, two angles: `prompts.test.ts` reads the prompt list as data, and
           // `prompt-session.test.ts` answers it with scripted keystrokes. Neither touches `cli.ts` — the
           // session harness drives the plopfile directly — so they belong here rather than in `cli`.
           include: ['tests/prompts.test.ts', 'tests/prompt-session.test.ts'],

@@ -463,7 +463,7 @@ describe('the claude-workflows feature', () => {
     })
   })
 
-  it('ships the three workflows and their document when enabled', async () => {
+  it('ships every feature workflow and its document when enabled', async () => {
     for (const workflowName of FEATURE_WORKFLOWS) {
       await expect(
         access(path.join(enabledDirectory, '.github', 'workflows', workflowName)),

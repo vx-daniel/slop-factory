@@ -17,7 +17,7 @@
  * keeps that from happening silently, so it belongs in CI rather than in a contributor's memory.
  *
  * WHAT IT DELIBERATELY DOES NOT DO: install dependencies or run the generated gate.
- * `tests/generation.test.ts` installs and gates ten of the sixteen combinations in temp directories, which
+ * `tests/generation.test.ts` installs and gates the sampled combinations in temp directories, which
  * is both safer and more complete. Installing inside `examples/` would also fire the generated `prepare`
  * script, which runs `git config core.hooksPath .githooks` against THE FACTORY'S OWN repository — git
  * writes repo-level config regardless of the subdirectory you are standing in. See examples/README.md.

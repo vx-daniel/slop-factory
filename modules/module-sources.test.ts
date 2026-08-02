@@ -146,7 +146,7 @@ describe('module copy trees', () => {
   })
 
   it('are excluded by every config that cannot import the copy-tree list', async () => {
-    // The three JSON configs write their globs by hand because JSON cannot import
+    // The the JSON configs write their globs by hand because JSON cannot import
     // `MODULE_COPY_TREES`. Without this, adding a copy tree passes every other check and then breaks
     // tsc, Biome, or the build with a symptom that points at the payload file rather than the config.
     //

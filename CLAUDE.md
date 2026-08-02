@@ -61,7 +61,7 @@ exists to block so a future reader can tell when that mode has shifted.
 | [generated-artifacts.md](.claude/rules/generated-artifacts.md) | Editing `examples/` or `dist/` instead of the generator that produces them |
 | [asserting-on-file-content.md](.claude/rules/asserting-on-file-content.md) | Assertions that match a file's prose rather than its data |
 
-## The two rules most often broken here
+## The rules most often broken here
 
 **Behaviour-preserving changes must prove it.** `examples:check` regenerates every committed example and
 compares content *and* executable bits, excluding nothing. If a refactor should not change generated

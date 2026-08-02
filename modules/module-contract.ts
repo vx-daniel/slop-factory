@@ -63,7 +63,7 @@ export interface ModuleCopyTree {
  * position — would silently corrupt it. That is the exact hazard the copy/render split exists to
  * prevent, and the reason no copy tree is ever rendered.
  *
- * ADDING A THIRD TREE means adding it here and nowhere else in code — but the three JSON configs that
+ * ADDING A TREE means adding it here and nowhere else in code — but the JSON configs that
  * cannot import this constant (`tsconfig.json`, `tsconfig.build.json`, `biome.jsonc`) must be updated
  * by hand. `module-sources.test.ts` fails if you forget, which is the only reason that is safe.
  */

@@ -47,8 +47,8 @@ Because the claims above are checked rather than asserted:
 
 - **Every combination is generated, installed, and gated in CI.** The matrix is *derived* from the
   contract's own constants rather than hand-listed, so adding a package manager extends it without anyone
-  remembering to. Most reachable combinations are installed and run their own gate; the ones sampled out
-  it skips are printed by the suite rather than passing silently.
+  remembering to. Most reachable combinations are installed and run their own gate; the ones it skips are
+  printed by the suite rather than passing silently.
 - **The factory is held to the standard it ships.** Its `biome.jsonc` *extends*
   `modules/gate/source/biome.json` rather than restating it, so there is one copy of the rules — including
   the naming plugin. It runs its own pre-commit hook, and its own pull requests are reviewed and
@@ -61,7 +61,7 @@ a green run is not the same as a complete one.
 
 ## The output, before you generate anything
 
-[`examples/`](examples/) holds four real generated projects: one per package manager
+[`examples/`](examples/) holds real generated projects: one per package manager
 ([`node-npm`](examples/node-npm), [`node-pnpm`](examples/node-pnpm), [`bun`](examples/bun)) plus
 [`node-npm-monorepo`](examples/node-npm-monorepo). Each name states its runtime and manager — `bun` needs
 no suffix, because for Bun those are one choice.
