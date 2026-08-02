@@ -17,16 +17,16 @@ import { describe, expect, it } from 'vitest'
  * kind of invariant that decays the moment someone adds a suite needing a fresh build.
  *
  * WHY IT ANCHORS ON THE CALLEE rather than on the words `npm run build`. Those words legitimately appear in
- * `tests/cli.test.ts` — twice in prose, and once as the literal string an assertion expects, because the
- * binary prints that advice when `dist/` is missing. Searching for them would fail against correct code,
+ * `tests/cli.test.ts`, both in prose and as the literal string an assertion expects, because the binary
+ * prints that advice when `dist/` is missing. Searching for them would fail against correct code,
  * which is the trap `.claude/rules/asserting-on-file-content.md` documents. Naming the spawn function, or
  * the argument array only a real call produces, distinguishes an invocation from a mention. The patterns
  * themselves are listed below rather than counted here, so adding one does not falsify this paragraph.
  *
  * MUTATION-TESTED in both shapes: restoring `spawnSync('npm', ['run', 'build'], …)` to
  * `tests/packaging.test.ts` fails this test and names the file, and so does `execSync('npm run build')`.
- * Both were run; the suite stays green with `tests/cli.test.ts`'s three mentions in place, which is the
- * false positive the anchoring exists to avoid.
+ * Both were run, and the suite stayed green against `tests/cli.test.ts` as it stands — which is the false
+ * positive the anchoring exists to avoid.
  */
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -35,11 +35,11 @@ const TESTS_DIRECTORY = path.join(FACTORY_ROOT, 'tests')
 /**
  * The shapes a build invocation takes in source.
  *
- * TWO PATTERNS, because there are two ways to spawn one and review pointed out the guard only knew the
- * first. Both are ANCHORED ON THE CALLEE rather than on the command text, which is what keeps them off the
- * three mentions of `npm run build` in `tests/cli.test.ts` — two in prose, and one as the literal string an
- * assertion expects, because the binary prints that advice. `toContain('npm run build')` names no spawn
- * function, so neither pattern reaches it.
+ * Each is ANCHORED ON THE CALLEE rather than on the command text, which is what keeps them off the
+ * occurrences of `npm run build` in `tests/cli.test.ts` — where it appears in prose, and as the literal
+ * string an assertion expects because the binary prints that advice. `toContain('npm run build')` names no
+ * spawn function, so no pattern here reaches it. Review added the second shape after the first went in;
+ * neither the list nor this paragraph states how many there are, so a third cannot falsify it.
  *
  * Whitespace-tolerant, because the formatter wraps long calls and a rigid string match would silently stop
  * guarding anything the first time one grew past the line limit.
