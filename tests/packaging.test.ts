@@ -32,15 +32,6 @@ import { PROJECT_MODULES } from '../modules/registry.js'
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
 
-/**
- * The build outputs whose absence means "you did not build", checked before anything else runs.
- *
- * A subset of `REQUIRED_ENTRY_POINTS` below — only the ones the BUILD produces. `package.json` and
- * `bin/slop-factory.mjs` are committed source and are always present, so they cannot distinguish an
- * unbuilt tree from a broken `files` field, which is the whole point of the distinction.
- */
-const BUILT_ENTRY_POINTS = ['dist/cli.js', 'dist/plopfile.js']
-
 /** Files that must be in the tarball regardless of which modules exist. */
 const REQUIRED_ENTRY_POINTS = [
   'package.json',
@@ -49,6 +40,23 @@ const REQUIRED_ENTRY_POINTS = [
   'dist/plopfile.js',
   'dist/plopfile-path.js',
 ]
+
+/** Where the build writes. Everything under it is produced; everything outside it is committed source. */
+const BUILD_OUTPUT_DIRECTORY = 'dist/'
+
+/**
+ * The entry points whose absence means "you did not build", checked before anything else runs.
+ *
+ * DERIVED from `REQUIRED_ENTRY_POINTS`, not hand-picked from it. Listing a subset by hand is how the check
+ * ends up covering two of the three build outputs — which it did, until review caught it: a build emitting
+ * `cli.js` and `plopfile.js` but not `plopfile-path.js` would pass the precondition and then fail with the
+ * "missing from the tarball" message this check exists to replace. Deriving it means adding a build output
+ * to the list above extends the precondition automatically.
+ *
+ * The filter is what makes the distinction meaningful: `package.json` and `bin/slop-factory.mjs` are
+ * committed source and always present, so they cannot tell an unbuilt tree from a broken `files` field.
+ */
+const BUILT_ENTRY_POINTS = REQUIRED_ENTRY_POINTS.filter((entryPoint) => entryPoint.startsWith(BUILD_OUTPUT_DIRECTORY))
 
 /**
  * Assets that are dotfiles or dot-directories, listed explicitly because they are the ones most likely

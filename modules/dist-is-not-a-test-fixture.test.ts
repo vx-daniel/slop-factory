@@ -16,26 +16,40 @@ import { describe, expect, it } from 'vitest'
  * is what keeps it there: the arrangement was previously safe "by convention only", which is precisely the
  * kind of invariant that decays the moment someone adds a suite needing a fresh build.
  *
- * WHY IT MATCHES THE ARGUMENT ARRAY rather than the words `npm run build`. Those words legitimately appear
- * in `tests/cli.test.ts` — twice in prose, and once as the literal string an assertion expects, because the
+ * WHY IT ANCHORS ON THE CALLEE rather than on the words `npm run build`. Those words legitimately appear in
+ * `tests/cli.test.ts` — twice in prose, and once as the literal string an assertion expects, because the
  * binary prints that advice when `dist/` is missing. Searching for them would fail against correct code,
- * which is the trap `.claude/rules/asserting-on-file-content.md` documents. Only a real invocation writes
- * the arguments as a quoted array, so that form distinguishes a call from a mention.
+ * which is the trap `.claude/rules/asserting-on-file-content.md` documents. Naming the spawn function, or
+ * the argument array only a real call produces, distinguishes an invocation from a mention. The patterns
+ * themselves are listed below rather than counted here, so adding one does not falsify this paragraph.
  *
- * MUTATION-TESTED: restoring `spawnSync('npm', ['run', 'build'], …)` to `tests/packaging.test.ts` fails
- * this test and names the file.
+ * MUTATION-TESTED in both shapes: restoring `spawnSync('npm', ['run', 'build'], …)` to
+ * `tests/packaging.test.ts` fails this test and names the file, and so does `execSync('npm run build')`.
+ * Both were run; the suite stays green with `tests/cli.test.ts`'s three mentions in place, which is the
+ * false positive the anchoring exists to avoid.
  */
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
 const TESTS_DIRECTORY = path.join(FACTORY_ROOT, 'tests')
 
 /**
- * The argument array of a build invocation, as it appears in source.
+ * The shapes a build invocation takes in source.
  *
- * Whitespace-tolerant, because the formatter may wrap a long `spawnSync` call across lines and a literal
- * string match would then silently stop guarding anything.
+ * TWO PATTERNS, because there are two ways to spawn one and review pointed out the guard only knew the
+ * first. Both are ANCHORED ON THE CALLEE rather than on the command text, which is what keeps them off the
+ * three mentions of `npm run build` in `tests/cli.test.ts` — two in prose, and one as the literal string an
+ * assertion expects, because the binary prints that advice. `toContain('npm run build')` names no spawn
+ * function, so neither pattern reaches it.
+ *
+ * Whitespace-tolerant, because the formatter wraps long calls and a rigid string match would silently stop
+ * guarding anything the first time one grew past the line limit.
  */
-const BUILD_INVOCATION_PATTERN = /'run',\s*'build'/
+const BUILD_INVOCATION_PATTERNS = [
+  // spawnSync('npm', ['run', 'build'], …) — an argument array.
+  /'run',\s*'build'/,
+  // execSync('npm run build') and friends — the command as one string, named by its caller.
+  /\b(?:exec|execSync|execFile|execFileSync|spawn|spawnSync)\(\s*['"`][^'"`]*npm\s+run\s+build/,
+]
 
 describe('dist is a precondition, not a fixture', () => {
   it('has no test suite that runs the build', async () => {
@@ -49,7 +63,7 @@ describe('dist is a precondition, not a fixture', () => {
     const buildingFiles: string[] = []
     for (const fileName of testFileNames) {
       const contents = await readFile(path.join(TESTS_DIRECTORY, fileName), 'utf8')
-      if (BUILD_INVOCATION_PATTERN.test(contents)) {
+      if (BUILD_INVOCATION_PATTERNS.some((pattern) => pattern.test(contents))) {
         buildingFiles.push(fileName)
       }
     }
