@@ -28,6 +28,14 @@ export default defineConfig({
     // Bundling the fast checks behind the slow ones means nobody runs either. `docs/verification.md`
     // tabulates what each suite proves, and `modules/vitest-projects-in-ci.test.ts` asserts that every
     // project named here is actually reached by the factory's own CI workflow.
+    //
+    // NO PROJECT MAY WRITE TO `dist/`. Vitest runs projects CONCURRENTLY, and five of the six below read
+    // `dist/plopfile.js` or `dist/cli.js`. `npm run build` begins by deleting `dist/`, so a project that
+    // built inside a hook would be wiping the artifact its siblings were mid-way through reading —
+    // nondeterministically, and reported against the READER rather than the writer. `packaging` did
+    // exactly that until #23; the build moved into `test:packaging`, where its four sibling scripts
+    // already had it. The build is a precondition of running these suites, not a fixture any of them
+    // sets up.
     projects: [
       {
         test: {
@@ -73,11 +81,13 @@ export default defineConfig({
       },
       {
         test: {
+          // Inspects the tarball `npm publish` would upload. Its hook shells out to `npm pack --dry-run`
+          // and READS `dist/`; it does not build. It used to, and carried the generation suite's
+          // ten-minute timeouts because of it — those are gone with the build, since the whole suite now
+          // measures 586ms and Vitest's 10s hook default leaves seventeen times that in hand. If this ever
+          // times out on a slower runner, re-add a timeout with the measurement rather than a round number.
           name: 'packaging',
           include: ['tests/packaging.test.ts'],
-          // Runs `npm run build` in a hook before asserting on the tarball.
-          testTimeout: GENERATION_TIMEOUT_MS,
-          hookTimeout: GENERATION_TIMEOUT_MS,
         },
       },
       {

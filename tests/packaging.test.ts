@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -39,6 +40,23 @@ const REQUIRED_ENTRY_POINTS = [
   'dist/plopfile.js',
   'dist/plopfile-path.js',
 ]
+
+/** Where the build writes. Everything under it is produced; everything outside it is committed source. */
+const BUILD_OUTPUT_DIRECTORY = 'dist/'
+
+/**
+ * The entry points whose absence means "you did not build", checked before anything else runs.
+ *
+ * DERIVED from `REQUIRED_ENTRY_POINTS`, not hand-picked from it. Listing a subset by hand is how the check
+ * ends up covering two of the three build outputs — which it did, until review caught it: a build emitting
+ * `cli.js` and `plopfile.js` but not `plopfile-path.js` would pass the precondition and then fail with the
+ * "missing from the tarball" message this check exists to replace. Deriving it means adding a build output
+ * to the list above extends the precondition automatically.
+ *
+ * The filter is what makes the distinction meaningful: `package.json` and `bin/slop-factory.mjs` are
+ * committed source and always present, so they cannot tell an unbuilt tree from a broken `files` field.
+ */
+const BUILT_ENTRY_POINTS = REQUIRED_ENTRY_POINTS.filter((entryPoint) => entryPoint.startsWith(BUILD_OUTPUT_DIRECTORY))
 
 /**
  * Assets that are dotfiles or dot-directories, listed explicitly because they are the ones most likely
@@ -134,15 +152,28 @@ function everyDeclaredTemplateFile(): string[] {
 let packedPaths: string[]
 
 beforeAll(() => {
-  // Setup failures THROW rather than assert. A broken precondition is not a failed claim about the
-  // system under test — it means the test never ran. Throwing aborts the suite once with the command's
-  // output, where an assertion here would report as a mysterious failure attributed to a hook.
-  const build = spawnSync('npm', ['run', 'build'], {
-    cwd: FACTORY_ROOT,
-    encoding: 'utf8',
-  })
-  if (build.status !== 0) {
-    throw new Error(`build failed:\n${build.stdout}${build.stderr}`)
+  /**
+   * The build is a PRECONDITION, not something this suite performs. It used to run `npm run build` right
+   * here, and that made `dist/` shared mutable state between Vitest projects: the build begins by DELETING
+   * `dist/`, while `layout`, `prompts`, `cli` and `generation` are all reading `dist/plopfile.js` at the
+   * same time. Vitest runs projects concurrently, so any invocation combining them failed
+   * nondeterministically — and blamed the reading project, never this one. See #23.
+   *
+   * `test:packaging` now builds first, exactly like the four sibling scripts that were already written that
+   * way. This suite was the only dist-dependent one that did it in a hook instead.
+   *
+   * Setup failures THROW rather than assert. A broken precondition is not a failed claim about the system
+   * under test — it means the test never ran. Throwing aborts the suite once with a message naming the fix,
+   * where an assertion would report as a mysterious failure attributed to a hook.
+   */
+  const unbuiltEntryPoints = BUILT_ENTRY_POINTS.filter((entryPoint) => !existsSync(path.join(FACTORY_ROOT, entryPoint)))
+  if (unbuiltEntryPoints.length > 0) {
+    throw new Error(
+      `the factory is not built — ${unbuiltEntryPoints.join(', ')} missing. Run \`npm run build\` first; ` +
+        '`npm run test:packaging` does it for you. Without this check the tarball assertions below fail ' +
+        'as "dist/cli.js missing from the tarball", which reads as a broken `files` config rather than a ' +
+        'missing build.',
+    )
   }
 
   // `--dry-run` computes the file list without writing a tarball, so the test leaves nothing behind.
