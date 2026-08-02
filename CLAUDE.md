@@ -123,6 +123,22 @@ than the lines it saves.
 
 Constants over magic values, at the top of the file. Options objects at three or more parameters.
 
+**Never restate a list this repository already holds.** A count or enumeration written in prose — "five
+projects", "the six suites", "the only casts in this file" — is a claim nothing checks, and it is false the
+moment the list changes. Name the file that holds the list instead, or describe the **kinds** of thing
+rather than counting them: "appears in prose and as an asserted literal" survives an edit that "twice in
+prose and once as a literal" does not.
+
+Exempt, and not a loophole: a count **pinned in a test**, which is an assertion rather than a claim — it is
+how `payload-copies.test.ts` and `EXPECTED_VITEST_PROJECT_COUNT` catch a derived list silently emptying, so
+deleting those would remove a guard. Also exempt: a **measured** number — the 85% floor, "3.3 seconds,
+measured" — which describes the world rather than data this repository holds.
+
+This is phrased as *do not write it* rather than *keep it current* on purpose. Eighteen such claims went
+wrong in one session ([#55](https://github.com/vx-daniel/slop-factory/issues/55)), **three of them committed
+while that issue was being written** — a convention that cannot survive its own author's full attention will
+not survive an ordinary day. Removing the obligation works where remembering to discharge it does not.
+
 When a change makes a document wrong, fix the document in the same change. Several README claims went stale
 as side effects of changes that were themselves correct and tested — including a worked example that
 pointed at a file deleted two changes earlier. A confidently wrong document is worse than none, because it
