@@ -81,11 +81,13 @@ export default defineConfig({
       },
       {
         test: {
+          // Inspects the tarball `npm publish` would upload. Its hook shells out to `npm pack --dry-run`
+          // and READS `dist/`; it does not build. It used to, and carried the generation suite's
+          // ten-minute timeouts because of it — those are gone with the build, since the whole suite now
+          // measures 586ms and Vitest's 10s hook default leaves seventeen times that in hand. If this ever
+          // times out on a slower runner, re-add a timeout with the measurement rather than a round number.
           name: 'packaging',
           include: ['tests/packaging.test.ts'],
-          // Runs `npm run build` in a hook before asserting on the tarball.
-          testTimeout: GENERATION_TIMEOUT_MS,
-          hookTimeout: GENERATION_TIMEOUT_MS,
         },
       },
       {
