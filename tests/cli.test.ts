@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import nodePlop from 'node-plop'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isPromptInterruption } from '../cli.js'
+import { INTERRUPTED, isPromptInterruption, listenForInterruption } from '../cli.js'
 import { resolvePlopfilePath } from '../plopfile-path.js'
 import { type CommandResult, runCommand } from './generate-project.js'
 
@@ -24,8 +24,16 @@ import { type CommandResult, runCommand } from './generate-project.js'
  * missing-build branch, the exit code as the shell sees it, and which stream each message went to. Changing
  * a shipped code path to observe it, when spawning observes more of it, is a trade with no upside.
  *
- * The one exception is `isPromptInterruption`, which is a pure predicate over three error shapes it cannot
- * produce itself. Reaching those through a real Ctrl-C needs a pseudo-terminal, which is #44.
+ * TWO THINGS ARE REACHED DIRECTLY RATHER THAN THROUGH THE BINARY, for different reasons.
+ *
+ * `listenForInterruption` is given a REAL SIGINT, raised in this process. No pseudo-terminal is involved,
+ * and an earlier version of this comment claiming one was required was wrong: Vitest's default pool is
+ * `forks`, so the worker is a child with no SIGINT listener of its own, and inquirer signals `process.pid`
+ * rather than the process group. This is the only automated coverage the interruption fix has (#50).
+ *
+ * `isPromptInterruption` is a pure predicate, tested against hand-built error shapes. That is deliberately
+ * NOT a reachability claim — two of the three shapes cannot occur with the installed inquirer at all, which
+ * `cli.ts` sets out in full. Ctrl-C never reaches this predicate; it raises a signal.
  */
 
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
@@ -214,10 +222,75 @@ describe('the binary without a build', () => {
   })
 })
 
+describe('listenForInterruption', () => {
+  /**
+   * THE ANCHOR FOR THE SIGINT FIX (#50), and the only automated coverage the production interruption code
+   * has. Without it the fix rests entirely on a by-hand pseudo-terminal run recorded in commit prose, which
+   * this repository's own standard — a guard is not done until you have watched it fail — does not accept.
+   *
+   * A REAL SIGNAL, raised in-process, which an earlier version of this work claimed was impossible because
+   * Vitest would treat SIGINT as "cancel the run". That was wrong, and measured wrong: the default pool is
+   * `forks`, so this worker is a child process carrying zero SIGINT listeners of its own, and inquirer
+   * targets `process.pid` rather than the process group. A worker-local handler competes with nothing.
+   *
+   * What killed the worker in the earlier attempt was sending Ctrl-C THROUGH inquirer with nothing
+   * listening — which is the bug, not a property of the runner. Installing the listener is what stops it.
+   *
+   * MUTATION EVIDENCE, and one honest gap:
+   *   • deleting `process.once('SIGINT', …)` fails the run — as "Worker exited unexpectedly" rather than an
+   *     assertion, because the unhandled signal kills the worker. That IS the pre-fix behaviour, reproduced.
+   *   • gutting `stop()` fails the second test by name.
+   *   • replacing the keep-alive interval with a one-shot does NOT fail either test, and cannot: in a Vitest
+   *     worker the event loop is busy, so the loop-empties race the timer exists for never happens. That
+   *     part of the fix is covered only by the by-hand pseudo-terminal runs recorded on #50. An end-to-end
+   *     anchor would close it; `script(1)` is util-linux and would make the suite Linux-only, which #51 is
+   *     open about not wanting to deepen.
+   */
+  const SIGNAL_DELIVERY_TIMEOUT_MS = 1000
+
+  it('resolves when a real SIGINT arrives, and leaves the process running', async () => {
+    const listenersBefore = process.listenerCount('SIGINT')
+    const interruption = listenForInterruption()
+
+    try {
+      process.kill(process.pid, 'SIGINT')
+
+      const outcome = await Promise.race([
+        interruption.interrupted,
+        new Promise((resolve) => setTimeout(() => resolve('never delivered'), SIGNAL_DELIVERY_TIMEOUT_MS)),
+      ])
+
+      expect(outcome, 'the signal was raised but the listener never saw it').toBe(INTERRUPTED)
+    } finally {
+      interruption.stop()
+    }
+
+    // Survival is half the claim: before the fix this exact signal terminated the process outright.
+    expect(process.listenerCount('SIGINT')).toBe(listenersBefore)
+  })
+
+  it('removes its listener when stopped without ever being signalled', async () => {
+    // THE CASE THAT MAKES THE CLEANUP ASSERTION REAL. `process.once` removes itself after firing, so the
+    // test above would pass with `stop()` gutted entirely — its listener count returns to baseline either
+    // way. Only a session that is never signalled can tell `stop()` from nothing at all.
+    const listenersBefore = process.listenerCount('SIGINT')
+    const interruption = listenForInterruption()
+    expect(process.listenerCount('SIGINT'), 'the listener was never installed').toBe(listenersBefore + 1)
+
+    interruption.stop()
+
+    expect(process.listenerCount('SIGINT'), 'stop() left its SIGINT listener behind').toBe(listenersBefore)
+  })
+})
+
 describe('isPromptInterruption', () => {
-  // The three signals its comment documents. Inquirer reports an abandoned session three different ways
-  // depending on how it ended, and each one must produce "Cancelled — nothing was written." rather than a
-  // stack trace. The comment claims three; before this test nothing checked that the predicate matched.
+  // THE PREDICATE'S LOGIC, against hand-built shapes — not proof that any of them is reachable, and the
+  // difference matters. Two of the three cannot occur with the installed inquirer 9.3.8: `ExitPromptError`
+  // and "User force closed" are `@inquirer/core` 10.x constructs, and neither string appears anywhere in
+  // `node_modules`. They are matched as forward compatibility for an upgrade, which `cli.ts` states.
+  //
+  // Only `ERR_USE_AFTER_CLOSE` — a Node readline error — is live today. Ctrl-C never reaches this predicate
+  // at all; it raises a signal, which `listenForInterruption` above is for.
   it('recognises a Ctrl-C ExitPromptError', () => {
     const exitPromptError = Object.assign(new Error('User force closed the prompt'), { name: 'ExitPromptError' })
     expect(isPromptInterruption(exitPromptError)).toBe(true)

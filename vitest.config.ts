@@ -9,6 +9,9 @@ import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './modules/module-contract.js'
  */
 const GENERATION_TIMEOUT_MS = 600_000
 
+/** Comfortably above `tests/drive-prompts.ts`'s per-prompt wait, so its diagnostic wins the race. */
+const INTERACTIVE_TIMEOUT_MS = 30_000
+
 export default defineConfig({
   test: {
     // Six projects, split by COST, because that split decides what gets run habitually. Listed roughly
@@ -48,7 +51,14 @@ export default defineConfig({
           // Reads the generator's prompt list without answering it. Cheap, but it needs the BUILT
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
-          include: ['tests/prompts.test.ts'],
+          // Two files, one subject: `prompts.test.ts` reads the prompt list as data, and
+          // `prompt-session.test.ts` answers it with scripted keystrokes. Neither touches `cli.ts` — the
+          // session harness drives the plopfile directly — so they belong here rather than in `cli`.
+          include: ['tests/prompts.test.ts', 'tests/prompt-session.test.ts'],
+          // Above the harness's own 5s wait for a prompt to render, so a mis-scripted flow reports the
+          // transcript it captured rather than Vitest's generic "test timed out", which says nothing about
+          // which question never appeared.
+          testTimeout: INTERACTIVE_TIMEOUT_MS,
         },
       },
       {
