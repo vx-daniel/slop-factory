@@ -19,11 +19,11 @@ Every row is a file you can read in [`examples/`](examples/) before deciding.
 | | |
 |---|---|
 | **One gate command** | `check:all` runs Biome → `tsc --noEmit` → tests, cheap-first, so a type error surfaces in seconds instead of after the suite. `scripts/gate.ts` detects npm, pnpm, bun or yarn at runtime, so the command is the same whichever you use. |
-| **A coverage floor that fails** | 85%, enforced in CI. Under Vitest that is four metrics — lines, branches, functions **and** statements — over an explicit `src/**/*.ts` include, so an untested file counts against you rather than vanishing from the table. Under `bun test` it is functions and lines only, with no include; [#5](https://github.com/vx-daniel/slop-factory/issues/5) carries the measurement. `COVERAGE.md` is regenerated from the report. |
+| **A coverage floor that fails** | 85%, enforced in CI. Under Vitest that is lines, branches, functions **and** statements — over an explicit `src/**/*.ts` include, so an untested file counts against you rather than vanishing from the table. Under `bun test` it is functions and lines only, with no include; [#5](https://github.com/vx-daniel/slop-factory/issues/5) carries the measurement. `COVERAGE.md` is regenerated from the report. |
 | **A pre-commit hook** | Wired by `prepare` through `core.hooksPath`. No husky, no extra dependency, nothing to remember. |
 | **CI that works on the first push** | `ci.yml` runs the gate. `coverage-main.yml` keeps `COVERAGE.md` current. `secret-scan.yml` fails a pull request that commits a secret — gitleaks, scoped to the PR's new commits, with no token to provision. |
 | **Rules an agent can use** | `CLAUDE.md`, the rules under `.claude/rules/`, and agent skills. Each rule states *the failure mode it blocks*, so a session with no memory of the decision can tell when it has stopped applying. |
-| **Docs that carry the reasoning** | One document under `docs/` per module the project was built from — why each choice was made, not what the flags do. The count follows your answers; [`node-npm`](examples/node-npm/docs) gets seven. |
+| **Docs that carry the reasoning** | One document under `docs/` per module the project was built from — why each choice was made, not what the flags do. The count follows your answers — see [`node-npm`](examples/node-npm/docs). |
 | **Layered configuration** *(opt-in)* | TOML defaults, local overrides, `.env`, validated by a Zod schema before anything reads a value. |
 | **Claude workflows** *(opt-in)* | PR review, issue triage, test audit. Self-contained files, no organisation setup; inert until `CLAUDE_CODE_OAUTH_TOKEN` is set. |
 
@@ -47,7 +47,7 @@ Because the claims above are checked rather than asserted:
 
 - **Every combination is generated, installed, and gated in CI.** The matrix is *derived* from the
   contract's own constants rather than hand-listed, so adding a package manager extends it without anyone
-  remembering to. Ten of the sixteen reachable combinations are installed and run their own gate; the six
+  remembering to. Most reachable combinations are installed and run their own gate; the ones sampled out
   it skips are printed by the suite rather than passing silently.
 - **The factory is held to the standard it ships.** Its `biome.jsonc` *extends*
   `modules/gate/source/biome.json` rather than restating it, so there is one copy of the rules — including

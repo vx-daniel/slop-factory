@@ -62,7 +62,7 @@ const executedCommands = workflow.split('\n').filter((line) => /^\s*run:/.test(l
 Name the predicate for what it selects (`commandsExecutedBy`), not how it selects it. The filter is the
 assertion's subject; burying it in a regex at the call site hides what is being checked.
 
-**3. Match a form that prose cannot produce.** Weakest of the three, but often the only option for
+**3. Match a form that prose cannot produce.** Weakest of these, but often the only option for
 config-with-comments.
 
 ```ts

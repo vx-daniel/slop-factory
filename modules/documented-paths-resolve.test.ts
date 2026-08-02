@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { MODULE_COPY_TREE_DIRECTORY_NAMES } from './module-contract.js'
 
 /**
  * Guards that every path this repository's documents point at actually exists.
@@ -32,7 +33,15 @@ const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
  * untracked, which is why they are absent here — restating them would be a second copy of `.gitignore`, and
  * the copy is what goes wrong.
  */
-const EXCLUDED_PATH_PATTERNS = [/^examples\//, /^modules\/[^/]+\/(?:source|packageSource)\//]
+const EXCLUDED_PATH_PATTERNS: readonly RegExp[] = [
+  /^examples\//,
+  // DERIVED, not restated. `vitest.config.ts` excludes the same trees from the unit project the same way,
+  // for the same reason: adding a copy tree must extend every exclusion automatically, or the next one
+  // starts resolving a generated project's links against the factory's own filesystem.
+  ...MODULE_COPY_TREE_DIRECTORY_NAMES.map(
+    (copyTreeName: string): RegExp => new RegExp(`^modules/[^/]+/${copyTreeName}/`),
+  ),
+]
 
 /**
  * A markdown link's target: `[text](target)`.

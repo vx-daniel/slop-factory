@@ -29,11 +29,11 @@ export default defineConfig({
     // tabulates what each suite proves, and `modules/vitest-projects-in-ci.test.ts` asserts that every
     // project named here is actually reached by the factory's own CI workflow.
     //
-    // NO PROJECT MAY WRITE TO `dist/`. Vitest runs projects CONCURRENTLY, and five of the six below read
+    // NO PROJECT MAY WRITE TO `dist/`. Vitest runs projects CONCURRENTLY, and nearly every one below reads
     // `dist/plopfile.js` or `dist/cli.js`. `npm run build` begins by deleting `dist/`, so a project that
     // built inside a hook would be wiping the artifact its siblings were mid-way through reading —
     // nondeterministically, and reported against the READER rather than the writer. `packaging` did
-    // exactly that until #23; the build moved into `test:packaging`, where its four sibling scripts
+    // exactly that until #23; the build moved into `test:packaging`, where the sibling scripts
     // already had it. The build is a precondition of running these suites, not a fixture any of them
     // sets up.
     projects: [

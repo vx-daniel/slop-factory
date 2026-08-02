@@ -17,7 +17,7 @@ There are two of everything, for the same reason:
 | PR review | `.github/workflows/claude-pr-review.yml` | `modules/claude-workflows/source/.github/workflows/...` |
 | Secret scan | `.github/workflows/secret-scan.yml` | `modules/base/source/.github/workflows/secret-scan.yml` |
 
-**Three of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
+**Some of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
 it ships rather than a parallel version of it, it does:
 
 - **The linter EXTENDS the shipped config.** `biome.jsonc` extends `modules/gate/source/biome.json`, so the
@@ -105,7 +105,7 @@ every commit trains people to stop reading it.
 
 ## Things that look like bugs and are not
 
-- **The factory runs its built output, always — even in development.** Two measured constraints force it;
+- **The factory runs its built output, always — even in development.** Measured constraints force it;
   see [`docs/publishing.md`](docs/publishing.md). Do not "simplify" a script to run the `.ts` directly.
 - **`source/` trees are never rendered.** Handlebars and GitHub Actions both claim `{{ }}`. A workflow
   containing `${{ }}` run through Handlebars emits a bare `$` and fails only in CI.

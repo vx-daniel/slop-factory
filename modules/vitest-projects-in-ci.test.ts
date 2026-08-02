@@ -259,6 +259,12 @@ describe('every suite the factory can run', () => {
      * makes the match safe: `verify` is an ordinary English word, and searching the whole document for it
      * would pass on prose while the chain itself stayed wrong — the exact false negative
      * `.claude/rules/asserting-on-file-content.md` exists to prevent.
+     *
+     * ASSUMES ONE FENCED BLOCK NAMES THE CHAIN. The lazy match walks forward from the first ```bash fence
+     * until it passes a line containing `prepublishOnly:`, so a second bash block added ABOVE the chain
+     * would widen the span rather than fail. It would still have to contain every step to pass, so the
+     * failure mode is a confusing match rather than a false green — but it is an assumption, recorded here
+     * because `docs/publishing.md` has exactly one such block today and nothing enforces that.
      */
     const chainBlock = publishingDoc.match(/```bash\n(?:.*\n)*?.*prepublishOnly:(?:.*\n)*?```/)?.[0] ?? ''
 
