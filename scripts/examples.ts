@@ -55,10 +55,11 @@ interface ExampleProject {
 }
 
 /**
- * The committed combinations. Four of them, chosen for information density rather than coverage —
- * `tests/generation.test.ts` is what enumerates every reachable combination and gates ten of them.
+ * The committed combinations, named in `EXAMPLE_PROJECTS` below and chosen for information density rather
+ * than coverage — `tests/generation.test.ts` is what enumerates every reachable combination and gates the
+ * sampled ones.
  *
- * Three vary by package manager and runner; the fourth varies by LAYOUT, which is the only axis that
+ * Most vary by package manager and runner; one varies by LAYOUT, which is the only axis that
  * changes the shape of the tree rather than the contents of a few files.
  */
 const EXAMPLE_PROJECTS: readonly ExampleProject[] = [

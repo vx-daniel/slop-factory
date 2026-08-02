@@ -76,7 +76,7 @@ That last one is derived from `renderedTemplates()` across every reachable answe
 It used to be a hardcoded array of five base filenames, which made the test's own name false the moment a
 template was added — and its hardcoded `dist/modules/base/` prefix meant a non-base module's template could
 not have been checked even if someone had remembered. Two templates reached a tarball unnoticed that way.
-There are ten now, and a new one is covered without anyone remembering.
+The list is derived now, so a new one is covered without anyone remembering.
 
 The union across answer sets matters because a module may decline to emit for some answers — `vitest`
 returns no `coverage-main.yml` under Bun — so no single combination sees them all.

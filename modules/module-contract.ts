@@ -42,7 +42,7 @@ export interface ModuleCopyTree {
 }
 
 /**
- * Every verbatim-copy tree a module may ship. THE single list — nine things derive from it.
+ * Every verbatim-copy tree a module may ship. THE single list — everything else derives from it.
  *
  * WHY MORE THAN ONE TREE. A module's files do not all belong at the same level. The config
  * module is the clear case: `config.defaults.toml`, `.env.example` and `docs/configuration.md` belong at
