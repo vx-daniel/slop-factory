@@ -59,8 +59,12 @@ with markers compiled into `cli.ts` and every suite run ([#52](https://github.co
 
 Two suites looked like they covered it. `cli.test.ts` spawns the real binary, but a child's stdin is a pipe
 and `runGenerate` refuses a non-TTY stdin before reaching a prompt. `prompt-session.test.ts` answers real
-questions, but drives the plopfile and never loads `cli.ts`. Neither was wrong about what it did; both were
-named as though they did more.
+questions, but drives the plopfile, so nothing it does ever enters `cli.ts`. Neither was wrong about what it
+did; both were named as though they did more.
+
+Say **enters**, not *loads*: the shared harness imports `runCommandLine` for the other driver, so
+`prompt-session.test.ts` pulls `cli.ts`'s module in transitively and still never calls a line of it. An
+import is not a code path, and only one of the two is coverage.
 
 So the lesson is not "assert harder" — it is that a suite's NAME is not evidence of its reach. `prompts`
 above catches a guard that cannot fail; this catches a *file* that never runs what its name implies. The
