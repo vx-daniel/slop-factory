@@ -14,7 +14,7 @@ const INTERACTIVE_TIMEOUT_MS = 30_000
 
 export default defineConfig({
   test: {
-    // Six projects, split by COST, because that split decides what gets run habitually. Listed roughly
+    // The projects, split by COST, because that split decides what gets run habitually. Listed roughly
     // cheapest-first, and each one's own comment below gives the reason it is separate rather than folded
     // into the project before it.
     //
@@ -29,11 +29,11 @@ export default defineConfig({
     // tabulates what each suite proves, and `modules/vitest-projects-in-ci.test.ts` asserts that every
     // project named here is actually reached by the factory's own CI workflow.
     //
-    // NO PROJECT MAY WRITE TO `dist/`. Vitest runs projects CONCURRENTLY, and five of the six below read
+    // NO PROJECT MAY WRITE TO `dist/`. Vitest runs projects CONCURRENTLY, and nearly every one below reads
     // `dist/plopfile.js` or `dist/cli.js`. `npm run build` begins by deleting `dist/`, so a project that
     // built inside a hook would be wiping the artifact its siblings were mid-way through reading —
     // nondeterministically, and reported against the READER rather than the writer. `packaging` did
-    // exactly that until #23; the build moved into `test:packaging`, where its four sibling scripts
+    // exactly that until #23; the build moved into `test:packaging`, where the sibling scripts
     // already had it. The build is a precondition of running these suites, not a fixture any of them
     // sets up.
     projects: [
@@ -47,7 +47,7 @@ export default defineConfig({
           // smol-toml, which the factory does not install — so collecting them here fails on imports
           // that are correct where the files actually live.
           //
-          // DERIVED from the contract rather than listed, unlike the three JSON configs that cannot
+          // DERIVED from the contract rather than listed, unlike the JSON configs that cannot
           // import it. Adding a copy tree covers this file automatically.
           exclude: MODULE_COPY_TREE_DIRECTORY_NAMES.map(
             (copyTreeDirectoryName) => `modules/*/${copyTreeDirectoryName}/**`,
@@ -59,7 +59,7 @@ export default defineConfig({
           // Reads the generator's prompt list without answering it. Cheap, but it needs the BUILT
           // plopfile (node-plop imports it through Node), so it cannot live in the unit project.
           name: 'prompts',
-          // Two files, one subject: `prompts.test.ts` reads the prompt list as data, and
+          // One subject, two angles: `prompts.test.ts` reads the prompt list as data, and
           // `prompt-session.test.ts` answers it with scripted keystrokes. Neither touches `cli.ts` — the
           // session harness drives the plopfile directly — so they belong here rather than in `cli`.
           include: ['tests/prompts.test.ts', 'tests/prompt-session.test.ts'],

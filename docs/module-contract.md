@@ -3,9 +3,9 @@
 How a module contributes to a generated project, and how to write one. The contract itself is
 `modules/module-contract.ts`; this explains the reasoning the type signatures cannot carry.
 
-## The five channels
+## The channels
 
-Three place files, two merge data. The copy/render split is load-bearing, not stylistic.
+Some place files, the rest merge data. The copy/render split is load-bearing, not stylistic.
 
 | Channel | What it is | Rendered? |
 |---|---|---|
@@ -19,13 +19,13 @@ Three place files, two merge data. The copy/render split is load-bearing, not st
 That convention is the entire mapping — to know where a file ends up, read its path under the copy tree,
 then read which root that tree lands in.
 
-## Why there are two copy trees
+## Why there is more than one copy tree
 
 A module's files do not all belong at the same level. The config module is the case that forced it:
 `config.defaults.toml` belongs at the repository root under any layout (its loader walks *up* to find
 it), while `src/config/**` is the package's own source.
 
-Under the single-package layout the two roots are the **same directory**, so the split is a provable
+Under the single-package layout the roots coincide in the **same directory**, so the split is a provable
 no-op there — which is how it was introduced without changing a byte of existing output. Under a
 workspace, `packageSource/` lands in `packages/<name>/` and the split starts doing visible work.
 
@@ -41,11 +41,11 @@ So the copy channels do no template evaluation whatsoever. Anything that genuine
 lives **outside** any copy tree as a `.hbs` file next to a module descriptor, so a file cannot be rendered
 by accident. Each was moved out only after confirming it contains no `{{ }}` of its own.
 
-### Two templates that cut against that rule
+### The templates that cut against that rule
 
 **`ci.yml.hbs` legitimately contains `${{ }}`**, escaped as `$\{{ github.ref }}`. It was originally one
 verbatim copy per package manager; a third manager would have meant a third near-identical 50-line file,
-so it is now one template interpolating the two things that actually vary — the setup steps and the
+so it is now one template interpolating what actually varies — the setup steps and the
 install command. `tests/generation.test.ts` asserts the generated file still contains
 `${{ github.ref }}` intact, so breaking the escape fails the suite rather than shipping a workflow with a
 bare `$` in it.

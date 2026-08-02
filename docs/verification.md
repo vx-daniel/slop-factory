@@ -1,6 +1,6 @@
 # Verification
 
-Seven suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
+The suites, ordered cheap-first. The split is deliberate: bundling fast checks behind slow ones means
 nobody runs either.
 
 | Suite | Command | Cost | What it proves |
@@ -18,13 +18,13 @@ generated projects wire theirs — runs `check:all` and `examples:check`, about 
 second step is there because "changed a module, forgot to refresh the examples" is the most frequent mistake
 in this repository's history, and it is the one a human would otherwise push.
 
-`test:prompts`, `test:cli`, `test:layout` and `verify` are deliberately **not** in the hook: the first three
-only fire on generator or CLI changes and each rebuilds, and the last takes minutes. All four run in CI —
+`test:prompts`, `test:cli`, `test:layout` and `verify` are deliberately **not** in the hook: the test suites
+only fire on generator or CLI changes and each rebuilds, and the last takes minutes. All run in CI —
 `modules/vitest-projects-in-ci.test.ts` fails if a Vitest project is ever left out of the workflow.
 
 The suites are independent: any combination of them can run in one `vitest` invocation. That was not always
-true — `packaging` used to build inside a hook, and the build deletes `dist/` while the five suites that read
-it are running, so combining projects failed nondeterministically and blamed whichever one happened to be
+true — `packaging` used to build inside a hook, and the build deletes `dist/` out from under every suite
+that reads it, so combining projects failed nondeterministically and blamed whichever one happened to be
 reading ([#23](https://github.com/vx-daniel/slop-factory/issues/23)). The build now lives in the npm scripts,
 where every other `test:*` script already had it, and `modules/dist-is-not-a-test-fixture.test.ts` fails if a
 suite starts building again.
@@ -82,8 +82,8 @@ combination the prompts gain is never gated, and one they lose is gated forever 
 cannot produce it. Deriving it means adding a manager or runner extends the matrix without anyone
 remembering to.
 
-**Sixteen combinations are enumerated; ten install and gate.** Sampling is separate from reachability and
-stated as a predicate rather than by omission:
+**Every reachable combination is enumerated; a subset installs and gates.** Sampling is separate from
+reachability and stated as a predicate rather than by omission:
 
 - **Single-package gets no discount** — it is the default and the cheapest to get wrong. A test asserts no
   `single` row is ever sampled out.
@@ -91,9 +91,9 @@ stated as a predicate rather than by omission:
   *discovery* and the two runners scope that by mechanisms one project cannot both exercise: Vitest via
   `--dir packages`, `bun test` via `root` in `bunfig.toml`.
 
-The six uninstalled combinations are **printed** in the run output, not silently dropped, and the count is
+The uninstalled combinations are **printed** in the run output, not silently dropped, and the count is
 pinned so widening or narrowing the sampling is a deliberate edit. A suite that covers less than it appears
-to is worse than a slow one. Those six are still covered for file *placement* by the layout suite.
+to is worse than a slow one. Those are still covered for file *placement* by the layout suite.
 
 Current status: **148 passed, 14 skipped of 162.** The skips are runner- or feature-specific and fully
 accountable — a coverage-README test that only applies under Vitest, a `bunfig.toml` test that only applies

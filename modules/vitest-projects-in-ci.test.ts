@@ -31,6 +31,12 @@ import vitestConfiguration from '../vitest.config.js'
 const FACTORY_ROOT = path.resolve(import.meta.dirname, '..')
 const CI_WORKFLOW_PATH = path.join(FACTORY_ROOT, '.github', 'workflows', 'ci.yml')
 const PACKAGE_JSON_PATH = path.join(FACTORY_ROOT, 'package.json')
+const VERIFICATION_DOC_PATH = path.join(FACTORY_ROOT, 'docs', 'verification.md')
+const README_PATH = path.join(FACTORY_ROOT, 'README.md')
+const PUBLISHING_DOC_PATH = path.join(FACTORY_ROOT, 'docs', 'publishing.md')
+
+/** The script whose chain `docs/publishing.md` reproduces for a reader about to publish. */
+const PUBLISH_GATE_SCRIPT = 'prepublishOnly'
 
 /** The flag by which a package.json script selects a Vitest project. */
 const VITEST_PROJECT_FLAG = '--project'
@@ -169,6 +175,108 @@ function scriptNamesReachableFrom(
   }
   return reachedScriptNames
 }
+
+/**
+ * The script names a markdown document names, read from its CODE and TABLE cells rather than its prose.
+ *
+ * Both documents below legitimately discuss suites in sentences — `verification.md` explains which ones the
+ * pre-commit hook deliberately skips, and would satisfy a prose match while its table stayed wrong. Reading
+ * only backticked spans keeps the assertion on what the document TELLS A READER TO RUN.
+ */
+function scriptNamesNamedIn(documentContents: string): ReadonlySet<string> {
+  const scriptNames = new Set<string>()
+  for (const [, scriptName] of documentContents.matchAll(/`npm (?:run )?([\w:-]+)`/g)) {
+    if (scriptName !== undefined) {
+      scriptNames.add(scriptName)
+    }
+  }
+  // The README lists the commands in a fenced block rather than backticks, so those count too.
+  for (const [, scriptName] of documentContents.matchAll(/^npm (?:run )?([\w:-]+)/gm)) {
+    if (scriptName !== undefined) {
+      scriptNames.add(scriptName)
+    }
+  }
+  return scriptNames
+}
+
+describe('every suite the factory can run', () => {
+  /**
+   * WHY THE DOCUMENTS ARE CHECKED AND NOT JUST CI. A suite that runs but is described nowhere is invisible
+   * to whoever has to decide which command to type, and the documents that list them drifted repeatedly:
+   * `verification.md`'s table lost a row, the README's command block lost an entry, and
+   * `publishing.md`'s chain lost a step — each time because a project was added and the prose that
+   * enumerates projects was not (#55).
+   *
+   * Derived from `package.json` rather than from a list here, so adding a script extends the check.
+   */
+  it('is listed in the verification document', async () => {
+    const [scripts, verificationDoc] = await Promise.all([
+      readPackageJsonScripts(),
+      readFile(VERIFICATION_DOC_PATH, 'utf8'),
+    ])
+    const documentedScripts = scriptNamesNamedIn(verificationDoc)
+
+    for (const projectName of readVitestProjectNames()) {
+      const scriptNames = scriptNamesByVitestProjectName(scripts).get(projectName) ?? []
+      expect(
+        scriptNames.filter((scriptName) => documentedScripts.has(scriptName)),
+        `docs/verification.md never names a command that runs the '${projectName}' project. Its table is ` +
+          'where someone decides what to run; a suite missing from it may as well not exist.',
+      ).not.toHaveLength(0)
+    }
+  })
+
+  it('is listed in the README command block', async () => {
+    const [scripts, readme] = await Promise.all([readPackageJsonScripts(), readFile(README_PATH, 'utf8')])
+    const documentedScripts = scriptNamesNamedIn(readme)
+
+    for (const projectName of readVitestProjectNames()) {
+      const scriptNames = scriptNamesByVitestProjectName(scripts).get(projectName) ?? []
+      expect(
+        scriptNames.filter((scriptName) => documentedScripts.has(scriptName)),
+        `README.md never names a command that runs the '${projectName}' project.`,
+      ).not.toHaveLength(0)
+    }
+  })
+
+  it('appears in the publish chain the publishing document reproduces', async () => {
+    // `publishing.md` restates `prepublishOnly` step by step, which is the single most rot-prone shape in
+    // the repository: a copy of a value that lives in package.json. Comparing the SET rather than the order
+    // keeps the check honest about what it can see — the document wraps the chain across lines.
+    const [scripts, publishingDoc] = await Promise.all([
+      readPackageJsonScripts(),
+      readFile(PUBLISHING_DOC_PATH, 'utf8'),
+    ])
+    const publishChain = [...(scripts[PUBLISH_GATE_SCRIPT] ?? '').matchAll(NPM_RUN_REFERENCE_PATTERN)]
+      .map(([, scriptName]) => scriptName)
+      .filter((scriptName): scriptName is string => scriptName !== undefined)
+
+    /**
+     * Only the fenced block that reproduces the chain, not the whole document.
+     *
+     * The steps are written there as bare arrow-separated tokens rather than as `npm run` invocations, so
+     * they cannot be found the way the other two checks find commands. Narrowing to the block is also what
+     * makes the match safe: `verify` is an ordinary English word, and searching the whole document for it
+     * would pass on prose while the chain itself stayed wrong — the exact false negative
+     * `.claude/rules/asserting-on-file-content.md` exists to prevent.
+     *
+     * ASSUMES ONE FENCED BLOCK NAMES THE CHAIN. The lazy match walks forward from the first ```bash fence
+     * until it passes a line containing `prepublishOnly:`, so a second bash block added ABOVE the chain
+     * would widen the span rather than fail. It would still have to contain every step to pass, so the
+     * failure mode is a confusing match rather than a false green — but it is an assumption, recorded here
+     * because `docs/publishing.md` has exactly one such block today and nothing enforces that.
+     */
+    const chainBlock = publishingDoc.match(/```bash\n(?:.*\n)*?.*prepublishOnly:(?:.*\n)*?```/)?.[0] ?? ''
+
+    expect(publishChain, `${PUBLISH_GATE_SCRIPT} runs no scripts — has it been renamed?`).not.toHaveLength(0)
+    expect(chainBlock, `docs/publishing.md no longer shows a ${PUBLISH_GATE_SCRIPT} chain to check`).not.toBe('')
+    expect(
+      publishChain.filter((scriptName) => !new RegExp(`\\b${scriptName}\\b`).test(chainBlock)),
+      `docs/publishing.md's chain omits steps that ${PUBLISH_GATE_SCRIPT} actually runs. It restates a ` +
+        'value that lives in package.json, which is the most rot-prone shape in the repository.',
+    ).toEqual([])
+  })
+})
 
 describe('every Vitest project the factory declares', () => {
   it('is selected by exactly one package.json script', async () => {

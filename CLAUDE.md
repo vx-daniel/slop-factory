@@ -17,7 +17,7 @@ There are two of everything, for the same reason:
 | PR review | `.github/workflows/claude-pr-review.yml` | `modules/claude-workflows/source/.github/workflows/...` |
 | Secret scan | `.github/workflows/secret-scan.yml` | `modules/base/source/.github/workflows/secret-scan.yml` |
 
-**Three of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
+**Some of those rows are not independent pairs, and that is the point.** Where the factory can use the thing
 it ships rather than a parallel version of it, it does:
 
 - **The linter EXTENDS the shipped config.** `biome.jsonc` extends `modules/gate/source/biome.json`, so the
@@ -40,7 +40,7 @@ rather than an adopter's.
 npm run check:all       # THE gate: biome → tsc --noEmit → unit tests, cheap-first
 npm run test:layout     # where files land, both layouts — seconds, installs nothing
 npm run examples:check  # zero drift = generated output is byte-for-byte unchanged
-npm run verify          # slow (~35s): generates + installs + gates 10 of 16 combinations
+npm run verify          # slow (~35s): generates, installs and gates the sampled combinations
 ```
 
 `check:all` is necessary but **not sufficient**. It proves the factory compiles and its own tests pass — it
@@ -61,7 +61,7 @@ exists to block so a future reader can tell when that mode has shifted.
 | [generated-artifacts.md](.claude/rules/generated-artifacts.md) | Editing `examples/` or `dist/` instead of the generator that produces them |
 | [asserting-on-file-content.md](.claude/rules/asserting-on-file-content.md) | Assertions that match a file's prose rather than its data |
 
-## The two rules most often broken here
+## The rules most often broken here
 
 **Behaviour-preserving changes must prove it.** `examples:check` regenerates every committed example and
 compares content *and* executable bits, excluding nothing. If a refactor should not change generated
@@ -105,7 +105,7 @@ every commit trains people to stop reading it.
 
 ## Things that look like bugs and are not
 
-- **The factory runs its built output, always — even in development.** Two measured constraints force it;
+- **The factory runs its built output, always — even in development.** Measured constraints force it;
   see [`docs/publishing.md`](docs/publishing.md). Do not "simplify" a script to run the `.ts` directly.
 - **`source/` trees are never rendered.** Handlebars and GitHub Actions both claim `{{ }}`. A workflow
   containing `${{ }}` run through Handlebars emits a bare `$` and fails only in CI.
@@ -122,6 +122,22 @@ codebase is read by agents starting from zero context, so an idiom that needs pr
 than the lines it saves.
 
 Constants over magic values, at the top of the file. Options objects at three or more parameters.
+
+**Never restate a list this repository already holds.** A count or enumeration written in prose — "five
+projects", "the six suites", "the only casts in this file" — is a claim nothing checks, and it is false the
+moment the list changes. Name the file that holds the list instead, or describe the **kinds** of thing
+rather than counting them: "appears in prose and as an asserted literal" survives an edit that "twice in
+prose and once as a literal" does not.
+
+Exempt, and not a loophole: a count **pinned in a test**, which is an assertion rather than a claim — it is
+how `payload-copies.test.ts` and `EXPECTED_VITEST_PROJECT_COUNT` catch a derived list silently emptying, so
+deleting those would remove a guard. Also exempt: a **measured** number — the 85% floor, "3.3 seconds,
+measured" — which describes the world rather than data this repository holds.
+
+This is phrased as *do not write it* rather than *keep it current* on purpose. Eighteen such claims went
+wrong in one session ([#55](https://github.com/vx-daniel/slop-factory/issues/55)), **three of them committed
+while that issue was being written** — a convention that cannot survive its own author's full attention will
+not survive an ordinary day. Removing the obligation works where remembering to discharge it does not.
 
 When a change makes a document wrong, fix the document in the same change. Several README claims went stale
 as side effects of changes that were themselves correct and tested — including a worked example that

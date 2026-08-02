@@ -17,7 +17,7 @@
  * keeps that from happening silently, so it belongs in CI rather than in a contributor's memory.
  *
  * WHAT IT DELIBERATELY DOES NOT DO: install dependencies or run the generated gate.
- * `tests/generation.test.ts` installs and gates ten of the sixteen combinations in temp directories, which
+ * `tests/generation.test.ts` installs and gates the sampled combinations in temp directories, which
  * is both safer and more complete. Installing inside `examples/` would also fire the generated `prepare`
  * script, which runs `git config core.hooksPath .githooks` against THE FACTORY'S OWN repository — git
  * writes repo-level config regardless of the subdirectory you are standing in. See examples/README.md.
@@ -55,10 +55,11 @@ interface ExampleProject {
 }
 
 /**
- * The committed combinations. Four of the sixteen, chosen for information density rather than coverage —
- * `tests/generation.test.ts` is what enumerates every reachable combination and gates ten of them.
+ * The committed combinations, named in `EXAMPLE_PROJECTS` below and chosen for information density rather
+ * than coverage — `tests/generation.test.ts` is what enumerates every reachable combination and gates the
+ * sampled ones.
  *
- * Three vary by package manager and runner; the fourth varies by LAYOUT, which is the only axis that
+ * Most vary by package manager and runner; one varies by LAYOUT, which is the only axis that
  * changes the shape of the tree rather than the contents of a few files.
  */
 const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
@@ -100,7 +101,7 @@ const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
       'The workspace layout, which is the only example that differs STRUCTURALLY rather than in a few ' +
       'files — source moves under packages/<name>/ while config stays at the root. Named as node-npm ' +
       'plus a layout suffix, and paired with npm + Vitest deliberately: the manager and runner deltas are ' +
-      'already readable in the other three, so diffing this against node-npm isolates the layout alone.',
+      'already readable in the others, so diffing this against node-npm isolates the layout alone.',
   },
 ]
 

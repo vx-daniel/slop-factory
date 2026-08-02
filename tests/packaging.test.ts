@@ -159,7 +159,7 @@ beforeAll(() => {
    * same time. Vitest runs projects concurrently, so any invocation combining them failed
    * nondeterministically — and blamed the reading project, never this one. See #23.
    *
-   * `test:packaging` now builds first, exactly like the four sibling scripts that were already written that
+   * `test:packaging` now builds first, exactly like the sibling scripts that were already written that
    * way. This suite was the only dist-dependent one that did it in a hook instead.
    *
    * Setup failures THROW rather than assert. A broken precondition is not a failed claim about the system

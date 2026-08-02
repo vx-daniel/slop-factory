@@ -4,11 +4,11 @@ import type { PackageJsonFragment, ProjectAnswers, ProjectModule } from '../modu
 export const CLAUDE_WORKFLOWS_FEATURE = 'claude-workflows'
 
 /**
- * Three GitHub Actions workflows that run Claude against a repository — selected by the
+ * The GitHub Actions workflows that run Claude against a repository — selected by the
  * `claude-workflows` feature checkbox.
  *
- * WHY THIS IS OPT-IN RATHER THAN PART OF `base`. All three require a `CLAUDE_CODE_OAUTH_TOKEN` repository
- * secret, and all three are inert without one. Shipping ~700 lines of workflow YAML that does nothing until
+ * WHY THIS IS OPT-IN RATHER THAN PART OF `base`. Each requires a `CLAUDE_CODE_OAUTH_TOKEN` repository
+ * secret, and each is inert without one. Shipping ~700 lines of workflow YAML that does nothing until
  * the adopter provisions a token is worse than not shipping it: the files read as broken rather than as
  * unconfigured. `secret-scan.yml` stays in `base` for the opposite reason — gitleaks needs no token at all,
  * so it works the moment a project is generated.
@@ -32,7 +32,7 @@ export const claudeWorkflowsModule: ProjectModule = {
   documentation: {
     path: 'docs/claude-workflows.md',
     title: 'Claude workflows',
-    summary: 'The three agent workflows, the one secret they need, and what each does when that secret is absent.',
+    summary: 'The agent workflows, the one secret they need, and what each does when that secret is absent.',
   },
 
   isSelected(answers: ProjectAnswers): boolean {

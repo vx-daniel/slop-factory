@@ -1,7 +1,7 @@
 # The modules
 
-Eleven modules on four axes: two always-on, one of three package managers (plus the runtime it implies), one
-of two test runners, one of two layouts, plus opt-in features.
+The modules, by axis: the always-on ones, then a package manager (plus the runtime it implies), one
+of the test runners, one of the layouts, plus opt-in features.
 
 See [`module-contract.md`](module-contract.md) for how a module contributes, and how to add one.
 
@@ -17,7 +17,7 @@ See [`module-contract.md`](module-contract.md) for how a module contributes, and
 | `bun-test` | runner = bun-test | `bunfig.toml`, the `vitest` type shim, the floor-guard test |
 | `monorepo` | layout = monorepo | The per-package `package.json`, and the `isMonorepo` vocabulary other modules' templates branch on |
 | `config` | `config` feature | Layered TOML config, Zod schema, the `config/` source tree, `.env.example` |
-| `claude-workflows` | `claude-workflows` feature | Three self-contained Claude workflows: PR review, issue triage, test audit |
+| `claude-workflows` | `claude-workflows` feature | Self-contained Claude workflows: PR review, issue triage, test audit |
 
 ## Which sets are exclusive
 
@@ -33,7 +33,7 @@ manager would duplicate them again.
 
 `monorepo` is orthogonal to both sets: a workspace can use any manager and either runner.
 
-## Five placements that look wrong at first glance
+## Placements that look wrong at first glance
 
 **The test runner is not a runtime concern.** Bun ships its own runner, so it looks like one — but the
 choice is genuinely orthogonal: you can run on Bun and keep Vitest, which is the default. That is why
@@ -50,7 +50,7 @@ manager-specific thing a workflow does. The parts that actually vary are the set
 command, so it is one rendered template interpolating vocabulary the manager modules contribute. Three
 near-identical 50-line copies was the alternative.
 
-**`secret-scan.yml` is in `base` but the three Claude workflows are opt-in**, even though all four arrived
+**`secret-scan.yml` is in `base` but the Claude workflows are opt-in**, even though they arrived
 together as organisation stubs. The split is the token: gitleaks needs no secret and works the moment a
 project is generated, so it belongs on by default. The Claude workflows are inert without
 `CLAUDE_CODE_OAUTH_TOKEN`, and ~700 lines of workflow that does nothing until a secret is provisioned reads
@@ -87,5 +87,5 @@ silently skipped — taking the floor guard with it.
 
 ## Related
 
-- [`module-contract.md`](module-contract.md) — the five channels, and how to add a module
+- [`module-contract.md`](module-contract.md) — the channels a module contributes through, and how to add one
 - [`verification.md`](verification.md) — what proves a module change is correct
