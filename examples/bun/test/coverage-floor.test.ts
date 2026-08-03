@@ -1,11 +1,17 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Guards the coverage floor itself.
+ * Guards the coverage floor, and the thing that makes the floor mean anything.
  *
- * TWO reasons this test exists, and neither is ceremony:
+ * Two halves. The first guards the threshold's EXISTENCE — see the reasons below. The second, further
+ * down, guards its REACH: `bun test` measures only files a test imported, so before that half existed an
+ * entirely untested module was absent from the coverage table rather than counted as zero, and the floor
+ * passed at 100% while the module went unexercised. Read that block before touching it; its mechanism is
+ * a deliberate side effect and it does not look like a test.
+ *
+ * TWO reasons the threshold half exists, and neither is ceremony:
  *
  * 1. **`bun test` has no `passWithNoTests`.** Zero test files is a hard exit 1 with no flag to soften
  *    it, so a freshly generated project with no source code would fail its own gate on day one. One
@@ -113,4 +119,101 @@ describe('coverage floor configuration', () => {
       'bunfig.toml must set `coverage = true` so the gate enforces the floor',
     ).toBe(true)
   })
+})
+
+/** The project root, derived once from the file the threshold lives in. */
+const PROJECT_ROOT = dirname(BUNFIG_PATH)
+
+/** Where source lives in a single-package project, relative to the root. */
+const SINGLE_PACKAGE_SOURCE_DIRECTORY = 'src'
+/** Where the workspace layout keeps its packages, each with its own source directory. */
+const WORKSPACE_PACKAGES_DIRECTORY = 'packages'
+
+/** Suffixes that are not measurable source: tests are excluded from coverage, declarations emit nothing. */
+const NON_SOURCE_SUFFIXES = ['.test.ts', '.d.ts']
+
+/** Generous, because this imports every module in the project; it exists to fail rather than hang. */
+const IMPORT_EVERY_SOURCE_FILE_TIMEOUT_MS = 30_000
+
+/**
+ * The source directories coverage should account for, under either layout.
+ *
+ * BOTH LAYOUTS FROM ONE LIST rather than branching on a flag, because this file ships through
+ * `packageSource/` and is copied VERBATIM — no Handlebars, so there is no `isMonorepo` to test. Probing
+ * the filesystem is what is left, and it is also more honest: it reports what the project actually has.
+ *
+ * The workspace case scans EVERY package, not just the one this file sits in. Under a workspace layout
+ * `packageSource/` lands in the first package only, so `../src` would cover that package and silently
+ * ignore every other one — which is the same blindness this half exists to remove, one level up.
+ */
+function findSourceDirectories(): readonly string[] {
+  const candidateDirectories = [join(PROJECT_ROOT, SINGLE_PACKAGE_SOURCE_DIRECTORY)]
+
+  const packagesDirectory = join(PROJECT_ROOT, WORKSPACE_PACKAGES_DIRECTORY)
+  if (existsSync(packagesDirectory)) {
+    for (const packageEntry of readdirSync(packagesDirectory, { withFileTypes: true })) {
+      if (packageEntry.isDirectory()) {
+        candidateDirectories.push(join(packagesDirectory, packageEntry.name, SINGLE_PACKAGE_SOURCE_DIRECTORY))
+      }
+    }
+  }
+
+  return candidateDirectories.filter((directory) => existsSync(directory))
+}
+
+/** Every measurable `.ts` file beneath a directory, recursively. */
+function findSourceFiles(sourceDirectory: string): readonly string[] {
+  return readdirSync(sourceDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(sourceDirectory, entry.name)
+    if (entry.isDirectory()) {
+      return findSourceFiles(entryPath)
+    }
+    if (!entry.name.endsWith('.ts') || NON_SOURCE_SUFFIXES.some((suffix) => entry.name.endsWith(suffix))) {
+      return []
+    }
+    return [entryPath]
+  })
+}
+
+describe('coverage floor reach', () => {
+  it(
+    'imports every source file, so an untested one counts as zero rather than vanishing',
+    async () => {
+      // THIS TEST WORKS BY SIDE EFFECT, which is why it needs explaining rather than tidying.
+      //
+      // `bun test` measures only files that were imported during the run. Vitest solves this with
+      // `coverage.include`; Bun has no equivalent, so an untested module is absent from the table
+      // ENTIRELY rather than reported as 0%, and the total is computed without it. Measured on Bun
+      // 1.3.14: adding an untested `src/orphan.ts` left the total at 100.00 and the floor passed.
+      //
+      // Importing each file is what puts it in the denominator. With this test present the same orphan
+      // appears at 0.00%, the total falls to 66.67, and `bun test` exits 1 — the floor does the
+      // enforcing, which is why there is no coverage assertion here to find.
+      //
+      // CONSEQUENCE, because it is a real cost and not a footnote: importing a module EXECUTES its
+      // top-level code. A module that opens a connection or reads required configuration at import time
+      // will do so on every `bun test`. If that is untenable for a file, the fix is to move the side
+      // effect into a function — which is worth doing anyway — not to weaken this test.
+      const failedImports: string[] = []
+
+      for (const sourceDirectory of findSourceDirectories()) {
+        for (const sourceFilePath of findSourceFiles(sourceDirectory)) {
+          try {
+            await import(sourceFilePath)
+          } catch (error) {
+            // Collected with the PATH rather than rethrown bare. A module that throws at import would
+            // otherwise fail this file with a stack trace pointing here, naming the harness instead of
+            // the module — and the reader would look for a bug in the guard.
+            failedImports.push(`${sourceFilePath}: ${String(error)}`)
+          }
+        }
+      }
+
+      // A project with no source yet is the NORMAL case immediately after generation, so an assertion
+      // that some file was found would fail every new project on its first run — the same day-one
+      // failure the threshold half of this file exists to avoid. Absence of source is not a defect.
+      expect(failedImports, 'a source file could not be imported, so coverage cannot account for it').toEqual([])
+    },
+    IMPORT_EVERY_SOURCE_FILE_TIMEOUT_MS,
+  )
 })

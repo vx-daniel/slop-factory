@@ -15,20 +15,25 @@ coverage = true
 
 # The floor, as a fraction rather than a percentage (Bun's units differ from Vitest's).
 #
-# IMPORTANT — this is a MATERIALLY WEAKER guarantee than the Vitest configuration it replaces, in two
-# ways. Both were measured, not assumed:
+# IMPORTANT — this is still a WEAKER guarantee than the Vitest configuration it replaces, though less so
+# than it was. Measured, not assumed:
 #
-#   1. Bun reports only `% Funcs` and `% Lines`. There is no branch or statement coverage, and a
-#      lines-only number is exactly where coverage theatre hides — a suite can execute every line while
-#      never taking the `else`.
+#   Bun reports only `% Funcs` and `% Lines`. There is no branch or statement coverage, and a lines-only
+#   number is exactly where coverage theatre hides — a suite can execute every line while never taking
+#   the `else`. That gap remains and cannot be closed from here; it is Bun's reporter.
 #
-#   2. **Bun only measures files a test imports.** Vitest has `coverage.include` for precisely this
-#      reason; Bun has no equivalent option. Verified: adding an untested `src/orphan.ts` containing a
-#      branch left it ABSENT from the coverage table entirely, the total still read 100%, and the floor
-#      still passed. So an entirely untested module is invisible here rather than counted as 0%.
+# THE SECOND GAP IS CLOSED, and the fix is easy to delete by accident. Bun measures only files a test
+# imported — Vitest has `coverage.include` for precisely this reason and Bun has no equivalent — so an
+# untested module used to be ABSENT from the coverage table rather than counted as 0%, leaving the total
+# at 100% and this floor passing. Measured on Bun 1.3.14 with an untested `src/orphan.ts`.
 #
-# Consequence: this floor tells you the covered files are well covered. It does NOT tell you that all
-# files are covered. Until Bun grows an `include` option, the compensating practice is to check the
-# coverage table's FILE LIST — not just the percentage — for anything missing. If that is not a trade
+# `test/coverage-floor.test.ts` now imports every source file, which puts each one in the denominator.
+# The same orphan reports 0.00% and drops the total to 66.67, so this threshold rejects it. That test is
+# therefore load-bearing for the number below: delete it and the floor silently stops seeing untested
+# files again. Its header explains the mechanism and the one cost — importing a module runs its
+# top-level code.
+#
+# Consequence: this floor now tells you all source files are accounted for, but only to line and
+# function depth. A branch left untaken inside a covered file is still invisible. If that is not a trade
 # this project can accept, move to Vitest; see docs/testing-with-bun-test.md.
 coverageThreshold = 0.85

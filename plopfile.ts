@@ -460,7 +460,14 @@ export default async function plopfile(plop: NodePlopAPI): Promise<void> {
             value: 'vitest',
           },
           {
-            name: 'bun test — no dependency, but coverage drops to funcs+lines only',
+            // NAMES THE METRIC THAT IS MISSING, not just the count of them. "funcs+lines only" was
+            // accurate and told an operator nothing they could act on; branch coverage is the one a
+            // lines-only number hides, because a suite can execute every line and never take an `else`.
+            //
+            // Deliberately no longer warns that untested files go uncounted. That was the larger half of
+            // the gap (#5) and it is closed: `test/coverage-floor.test.ts` imports every source file, so
+            // an untested module counts as zero instead of vanishing from the table.
+            name: 'bun test — no dependency, but no branch coverage',
             value: 'bun-test',
           },
         ],
