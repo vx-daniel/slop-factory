@@ -26,8 +26,22 @@ const FACTORY_BIOME_CONFIG_PATH = path.join(FACTORY_ROOT, 'biome.jsonc')
  * merely SITS under a directory of this name rather than one that contains it.
  */
 const ROOT_ONLY_EXCLUDED_DIRECTORY = '.claude'
-const ANCHORED_EXCLUSION = `"!${ROOT_ONLY_EXCLUDED_DIRECTORY}"`
-const UNANCHORED_EXCLUSION = `"!**/${ROOT_ONLY_EXCLUDED_DIRECTORY}"`
+/** The correct entry: excludes the project's own `.claude`, wherever the project itself lives. */
+const ANCHORED_EXCLUSION = `!${ROOT_ONLY_EXCLUDED_DIRECTORY}`
+/** The entry that caused #40, kept named so both tests can assert its absence rather than spell it twice. */
+const UNANCHORED_EXCLUSION = `!**/${ROOT_ONLY_EXCLUDED_DIRECTORY}`
+
+/**
+ * The same glob as it appears in a config FILE rather than in a parsed array.
+ *
+ * The two tests below check different representations of one fact — one reads `files.includes` out of
+ * parsed JSON, the other searches JSON-with-comments as text — and the quotes are what make the second
+ * safe. Naming the conversion keeps both tests using the same two constants, instead of the text one
+ * re-spelling them with quotes inline.
+ */
+function asConfiguredString(glob: string): string {
+  return `"${glob}"`
+}
 
 /**
  * Directories that legitimately nest, so their exclusions must KEEP the leading globstar.
@@ -95,12 +109,12 @@ describe('the .claude exclusion', () => {
     //
     // Restoring the leading globstar is a small edit that looks like a tidy-up, which is exactly why it
     // needs a test rather than a comment.
-    expect(shippedConfig.files.includes).toContain(`!${ROOT_ONLY_EXCLUDED_DIRECTORY}`)
+    expect(shippedConfig.files.includes).toContain(ANCHORED_EXCLUSION)
     expect(
       shippedConfig.files.includes,
-      `"!**/${ROOT_ONLY_EXCLUDED_DIRECTORY}" excludes any tree that SITS under a ${ROOT_ONLY_EXCLUDED_DIRECTORY} ` +
-        'directory, not just one containing it — a worktree or generated project there lints zero files. See #40.',
-    ).not.toContain(`!**/${ROOT_ONLY_EXCLUDED_DIRECTORY}`)
+      `${UNANCHORED_EXCLUSION} excludes any tree that SITS under a ${ROOT_ONLY_EXCLUDED_DIRECTORY} directory, ` +
+        'not just one containing it — a worktree or generated project there lints zero files. See #40.',
+    ).not.toContain(UNANCHORED_EXCLUSION)
 
     // The distinction this guard exists to keep straight: these must NOT be anchored the same way.
     for (const nestedDirectory of LEGITIMATELY_NESTED_EXCLUSIONS) {
@@ -122,10 +136,10 @@ describe('the .claude exclusion', () => {
     // false negative it replaces is silent. Do not loosen it; loosening is what re-admits the prose.
     const factoryConfigContents = await readFile(FACTORY_BIOME_CONFIG_PATH, 'utf8')
 
-    expect(factoryConfigContents).toContain(ANCHORED_EXCLUSION)
+    expect(factoryConfigContents).toContain(asConfiguredString(ANCHORED_EXCLUSION))
     expect(
       factoryConfigContents,
       'the factory config reintroduced the unanchored form, so its own gate cannot run from a worktree',
-    ).not.toContain(UNANCHORED_EXCLUSION)
+    ).not.toContain(asConfiguredString(UNANCHORED_EXCLUSION))
   })
 })
