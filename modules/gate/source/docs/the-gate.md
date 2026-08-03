@@ -104,3 +104,19 @@ nobody changed. Upgrade deliberately, as its own commit, so a new finding is att
 
 `typescript` is tilde-ranged for the same reason at lower intensity: TypeScript treats minors as
 breaking for type-checking purposes, so patches only.
+
+## Why `!.claude` has no `**/` and its neighbours do
+
+`biome.json`'s `files.includes` looks inconsistent, and the inconsistency is deliberate. It is JSON, so it
+cannot carry the reason inline — the reason is here.
+
+Biome matches these globs against the **absolute** path. `"!**/.claude"` therefore excludes any project
+that merely *sits* underneath a directory named `.claude`, rather than only the `.claude` directory inside
+your project. Move your checkout under one — a git worktree, or a tool that keeps working copies in
+`~/.claude/` — and `biome check` reports **"Checked 0 files"** and exits 1, on every branch, for reasons
+that have nothing to do with your code. Anchoring it to `"!.claude"` still skips your project's own
+`.claude/`, and stops the directory's *name* from disabling the gate wherever the project happens to live.
+
+`node_modules`, `dist` and `coverage` keep their `**/` on purpose: those legitimately nest, so a workspace
+has one per package and anchoring them would start linting `node_modules` inside a package. Same shape,
+different cause — do not "make them consistent".

@@ -40,12 +40,25 @@
     //     under Bun. Findings against them are not findings.
     //   examples — generated artifacts. `examples:check` already proves them byte-identical to the
     //     generator, so linting them could only report what the modules already answer for.
+    //
+    // `.claude` IS ANCHORED AND THE THREE ABOVE IT ARE NOT, which looks inconsistent and is the fix for
+    // #40. Biome matches these against the ABSOLUTE path, so `!**/.claude` excluded any tree that merely
+    // SITS under a directory named `.claude` — measured on 2.5.6 as "Checked 0 files", exit 1. That is the
+    // conventional worktree path, so no worktree could run this gate, and a project generated under
+    // `~/.claude/` failed its own. Anchoring fixes it: measured, a config under a `.claude` ancestor now
+    // processes its files while still skipping its own `.claude`.
+    //
+    // The other three keep `**/` deliberately. They look like the same bug and are not: `node_modules`,
+    // `dist` and `coverage` legitimately NEST — this repo's own monorepo layout declares
+    // `workspaces: ["packages/*"]` — so anchoring them would start linting `packages/*/node_modules`. A
+    // `.claude` directory only ever exists at a project root, which is what makes anchoring safe for it
+    // alone. Guarded by `modules/gate/gate-config.test.ts`.
     "includes": [
       "**",
       "!**/node_modules",
       "!**/dist",
       "!**/coverage",
-      "!**/.claude",
+      "!.claude",
       "!modules/*/source",
       "!modules/*/packageSource",
       "!examples"
