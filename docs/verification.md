@@ -9,7 +9,7 @@ nobody runs either.
 | prompts | `npm run test:prompts` | ~2s | the prompt list matches the contract, and a scripted session answers it |
 | layout | `npm run test:layout` | ~1s | **where** files land, for every layout — generates, installs nothing |
 | packaging | `npm run test:packaging` | ~1s | the tarball `npm publish` would upload |
-| cli | `npm run test:cli` | ~2s | what `npx slop-factory` prints, to which stream, and its exit code |
+| cli | `npm run test:cli` | ~2s | what `npx slop-factory` prints, to which stream, and its exit code — and a whole interactive `generate`, answered in-process |
 | examples | `npm run examples:check` | ~2s | the committed `examples/` still match the generator |
 | generation | `npm run verify` | ~35s | generated projects install and pass their own gate |
 
@@ -50,6 +50,26 @@ The lesson generalises: a module is selected by matching an **answer**, so a pro
 that answer disables the module silently. Anything that asserts on modules while bypassing prompts cannot
 catch it — only reading the prompt list can. `plopfile.ts` now also *throws* on an unknown or missing
 answer rather than casting it.
+
+## Why `cli` has two files
+
+The same failure one level up, and it lasted longer. Everything after `runGenerate` answers its questions —
+the change log, "Done.", the failure exit, the cancellation report — was executed by **nothing**, measured
+with markers compiled into `cli.ts` and every suite run ([#52](https://github.com/vx-daniel/slop-factory/issues/52)).
+
+Two suites looked like they covered it. `cli.test.ts` spawns the real binary, but a child's stdin is a pipe
+and `runGenerate` refuses a non-TTY stdin before reaching a prompt. `prompt-session.test.ts` answers real
+questions, but drives the plopfile, so nothing it does ever enters `cli.ts`. Neither was wrong about what it
+did; both were named as though they did more.
+
+Say **enters**, not *loads*: the shared harness imports `runCommandLine` for the other driver, so
+`prompt-session.test.ts` pulls `cli.ts`'s module in transitively and still never calls a line of it. An
+import is not a code path, and only one of the two is coverage.
+
+So the lesson is not "assert harder" — it is that a suite's NAME is not evidence of its reach. `prompts`
+above catches a guard that cannot fail; this catches a *file* that never runs what its name implies. The
+in-process file exists because presenting stdin as a terminal is the only way to get past that guard without
+a pseudo-terminal.
 
 ## Why the expensive one ships anyway
 

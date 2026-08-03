@@ -5,7 +5,18 @@ import inquirer from 'inquirer'
 import nodePlop from 'node-plop'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolvePlopfilePath } from '../plopfile-path.js'
-import { BACKSPACE, DOWN_ARROW, drivePrompts, ENTER } from './drive-prompts.js'
+import {
+  BACKSPACE,
+  DESTINATION_QUESTION,
+  DOWN_ARROW,
+  drivePrompts,
+  ENTER,
+  FEATURES_QUESTION,
+  LAYOUT_QUESTION,
+  PACKAGE_MANAGER_QUESTION,
+  PACKAGE_NAMES_QUESTION,
+  PROJECT_NAME_QUESTION,
+} from './drive-prompts.js'
 
 /**
  * The interactive session, rendered and answered — the part of the CLI no other suite reaches.
@@ -19,10 +30,21 @@ import { BACKSPACE, DOWN_ARROW, drivePrompts, ENTER } from './drive-prompts.js'
  * process, which in a Vitest worker kills the worker. Measured: the two tests that tried it took the file
  * down with them, reporting four of six tests as never run.
  *
- * Installing a SIGINT handler to swallow it was rejected rather than untried. Vitest handles SIGINT itself
- * as "cancel the run", so competing for that signal risks a CANCELLED run reporting as a passing one, which
- * is a worse outcome than the gap. Ctrl-C therefore needs a real subprocess with a pseudo-terminal, which
- * is what the remaining part of #44 is for.
+ * Installing a SIGINT handler HERE to swallow it was rejected rather than untried: a handler this file
+ * owned would exist only to keep the worker alive, which is a test faking the condition it is meant to
+ * observe.
+ *
+ * WHAT IS DANGEROUS IS THE MISSING HANDLER, NOT THE SIGNAL — and that distinction is now measured rather
+ * than assumed (#52). `cli-session.test.ts` sends a real Ctrl-C in this same worker and survives, because
+ * it goes through `cli.ts`, which installs `listenForInterruption` before any prompt renders. That is
+ * PRODUCTION code handling the signal, not test scaffolding. This file drives `runPrompts` directly, so no
+ * handler is installed and Node's default action still kills the worker — the warning above stands for
+ * anything written here.
+ *
+ * The old conclusion that Ctrl-C "needs a pseudo-terminal" was wrong, and so was the fear of competing with
+ * Vitest for the signal: `process.listenerCount('SIGINT')` is 0 inside a forks worker before `cli.ts` runs,
+ * and inquirer signals `process.pid` — the worker — while Vitest's cancel-the-run handling lives in the
+ * parent. Measured, with a check that tests after the Ctrl-C one still execute.
  *
  * A PSEUDO-TERMINAL SPIKE FOUND THE PATH WAS BROKEN, AND IT IS NOW FIXED (#50). Before the fix, three runs
  * of three: killed by SIGNAL 2 with exit code 0, and "Cancelled — nothing was written." never printed —
@@ -34,14 +56,6 @@ import { BACKSPACE, DOWN_ARROW, drivePrompts, ENTER } from './drive-prompts.js'
  * in-process kills the worker. The gap is narrower than it was — what remains untested here is the exit
  * code and the message, both proven by hand and neither reachable without a PTY.
  */
-
-/** Distinctive fragments of each prompt's own message, used to wait for it and to assert it appeared. */
-const PROJECT_NAME_QUESTION = 'Name of the project'
-const DESTINATION_QUESTION = 'Directory to create it in'
-const LAYOUT_QUESTION = 'Which layout?'
-const PACKAGE_NAMES_QUESTION = 'Names of the packages'
-const PACKAGE_MANAGER_QUESTION = 'Which package manager?'
-const FEATURES_QUESTION = 'Which optional features'
 
 /** A package name the validator refuses. */
 const REJECTED_PACKAGE_NAME = '../escape'
