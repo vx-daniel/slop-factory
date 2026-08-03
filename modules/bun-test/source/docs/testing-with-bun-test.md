@@ -31,27 +31,6 @@ number hides**: a suite can execute every line in a function while never taking 
 reads 100% while half the decisions are unexercised. A split or partial floor is where coverage theatre
 lives, and this is a partial floor by necessity rather than by choice.
 
-### Untested files are invisible, not counted as zero
-
-This is the bigger of the two coverage gaps, and the one most likely to mislead.
-
-Vitest has `coverage.include`, which measures **every** file matching a glob rather than only the ones a
-test happened to import — so a module with no tests appears at 0% and drags the total down. **Bun has no
-equivalent option.**
-
-Measured on Bun 1.3.14, in a project generated exactly like this one: adding an untested
-`src/orphan.ts` containing a branch left it **absent from the coverage table entirely**, the total still
-read `100.00`, and `bun run coverage` still **passed** the 0.85 floor.
-
-So read the floor correctly:
-
-> It tells you the covered files are well covered. It does **not** tell you that all files are covered.
-
-Until Bun grows an `include` option, the compensating practice is to check the coverage table's **file
-list**, not only its percentage — a file you expected to see and don't is the finding. This is a real
-argument for Vitest on any project where whole-module omissions are a plausible failure, and it is the
-main reason Vitest remains the generator's default.
-
 ### No `COVERAGE.md`
 
 Bun offers only `text` and `lcov` coverage reporters:
@@ -75,6 +54,34 @@ project with no tests at all would fail its own gate on day one.
 
 That is why `test/coverage-floor.test.ts` ships. **It is a real test, not a placeholder** — see below.
 
+## The gap that used to be here, and how it is held shut
+
+**Untested files were invisible rather than counted as zero.** This was the bigger of the two coverage
+gaps and the one most likely to mislead, so it is worth knowing that it existed and what closes it.
+
+Vitest has `coverage.include`, which measures **every** file matching a glob rather than only the ones a
+test happened to import — so a module with no tests appears at 0% and drags the total down. **Bun has no
+equivalent option.** Measured on Bun 1.3.14, in a project generated exactly like this one: adding an
+untested `src/orphan.ts` containing a branch left it **absent from the coverage table entirely**, the
+total still read `100.00`, and `bun run coverage` still **passed** the 0.85 floor.
+
+`test/coverage-floor.test.ts` closes it, by importing every file under `src/` (and under every
+`packages/*/src/` in a workspace). Importing a file is what puts it in the denominator, so the same
+orphan now reports `0.00%`, the total falls to `66.67`, and the floor rejects it.
+
+Two things follow, and both matter:
+
+- **That test is load-bearing, and does not look it.** It contains no coverage assertion — its effect
+  *is* the import. Delete it as redundant and the floor silently stops seeing untested files again.
+- **Importing a module executes its top-level code.** A module that opens a connection or reads required
+  configuration at import time will do so on every `bun test`. If that is untenable for a file, move the
+  side effect into a function rather than weakening the test — a module that cannot be imported safely is
+  also a module no test can cover.
+
+Read the floor correctly: it now accounts for every source file, but only to **line and function**
+depth. A branch left untaken inside a covered file is still invisible, which is the gap above and the
+remaining argument for Vitest.
+
 ## The floor lives in `bunfig.toml`
 
 ```toml
@@ -91,17 +98,25 @@ and only the separate `coverage` script would catch it.
 
 ### Why `test/coverage-floor.test.ts` should stay
 
-It asserts that the threshold above is present, is at least `0.85`, and that collection is enabled.
+It does two jobs, and the second one is invisible.
 
-That is not self-referential busywork: under `bun test` the floor lives in a file **nothing else reads**.
-Delete the `coverageThreshold` line and no error appears anywhere — the suite simply stops enforcing
-coverage while continuing to report success. This test turns that silent downgrade into a failure.
+**It asserts the threshold exists.** That is not self-referential busywork: under `bun test` the floor
+lives in a file **nothing else reads**. Delete the `coverageThreshold` line and no error appears anywhere
+— the suite simply stops enforcing coverage while continuing to report success. This test turns that
+silent downgrade into a failure.
 
-Mutate `bunfig.toml` and it goes red. That is the test-quality bar (`.claude/skills/test-quality/`), and
-this test meets it.
+**It imports every source file,** which is what puts untested modules in the coverage denominator at all
+— see the section above. This half has no assertion about coverage, because its effect *is* the import.
+It reads like dead weight and is the only thing standing between this project and a floor that passes at
+100% while a module goes unexercised.
 
-Keep it even once you have real tests. Delete it only if you migrate to Vitest, where the floor lives in
-`vitest.config.ts` and is enforced by the `coverage` script directly.
+Both halves are mutation-tested: break `bunfig.toml` and the first goes red; add an untested file under
+`src/` and the floor rejects it only while the second is present. That is the test-quality bar
+(`.claude/skills/test-quality/`), and this test meets it.
+
+Keep it even once you have real tests. Delete it only if you migrate to Vitest — where the floor lives in
+`vitest.config.ts`, enforced by the `coverage` script directly, and `coverage.include` restores the reach
+that the import loop is standing in for here.
 
 ## Commands
 
